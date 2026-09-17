@@ -46,11 +46,75 @@
   .object-info.pena { border-left-color: #ffd866; }
   .object-info strong { color: #7ec3f7; }
   .hints { color: #8d99b8; font-size: 12px; line-height: 1.7; }
+
+  /* ===== AUTH ===== */
+  #authBar { position: fixed; top: 18px; left: 50%; transform: translateX(-50%); z-index: 20;
+    display: flex; align-items: center; gap: 12px; background: rgba(13,18,38,.92);
+    border: 1px solid rgba(90,140,220,.3); border-radius: 999px; padding: 7px 16px;
+    backdrop-filter: blur(6px); box-shadow: 0 6px 24px rgba(0,0,0,.4); }
+  #authBar .who { color: #cdd8f0; font-size: 13px; max-width: 220px; overflow: hidden;
+    text-overflow: ellipsis; white-space: nowrap; }
+  #authBar .who b { color: #7ec3f7; }
+  #authBar button { padding: 6px 14px; border: none; border-radius: 999px; cursor: pointer;
+    font-size: 12.5px; font-weight: 600; }
+  #loginBtn { background: #4a86e8; color: #fff; }
+  #loginBtn:hover { background: #6ba0f0; }
+  #logoutBtn { background: rgba(220,80,80,.85); color: #fff; display: none; }
+  #logoutBtn:hover { background: #e05555; }
+
+  #authOverlay { position: fixed; inset: 0; z-index: 50; display: none;
+    align-items: center; justify-content: center; background: rgba(5,8,18,.7);
+    backdrop-filter: blur(4px); }
+  #authOverlay.open { display: flex; }
+  #authModal { position: relative; width: 340px; background: rgba(16,22,44,.98);
+    border: 1px solid rgba(90,140,220,.35); border-radius: 14px; padding: 26px 24px;
+    box-shadow: 0 20px 60px rgba(0,0,0,.6); }
+  #authModal h3 { color: #7ec3f7; font-size: 19px; margin-bottom: 4px; }
+  #authModal .sub { color: #8d99b8; font-size: 12.5px; margin-bottom: 18px; }
+  #authModal label { display: block; color: #b9c4de; font-size: 12.5px; margin: 12px 0 5px; }
+  #authModal input { width: 100%; padding: 10px 12px; border-radius: 8px;
+    border: 1px solid rgba(90,140,220,.3); background: rgba(8,12,26,.8); color: #e6ecf7;
+    font-size: 14px; outline: none; }
+  #authModal input:focus { border-color: #5aa7f0; }
+  #authSubmit { width: 100%; margin-top: 18px; padding: 11px; border: none; border-radius: 8px;
+    background: #4a86e8; color: #fff; font-size: 14px; font-weight: 600; cursor: pointer; }
+  #authSubmit:hover { background: #6ba0f0; }
+  #authSubmit:disabled { opacity: .55; cursor: wait; }
+  #authToggle { display: block; margin: 14px auto 0; background: none; border: none;
+    color: #7ec3f7; font-size: 12.5px; cursor: pointer; text-decoration: underline; }
+  #authMsg { min-height: 18px; margin-top: 12px; font-size: 12.5px; text-align: center; }
+  #authMsg.err { color: #ff8585; }
+  #authMsg.ok { color: #6fe09a; }
+  #authClose { position: absolute; top: 14px; right: 16px; background: none; border: none;
+    color: #8d99b8; font-size: 20px; cursor: pointer; line-height: 1; }
 </style>
 </head>
 <body>
 <div id="title"><h1>💧 Simulação de Água</h1><small>Física realista com chumbo, plástico e pena</small></div>
 <canvas id="canvas"></canvas>
+
+<!-- ===== BARRA DE AUTH ===== -->
+<div id="authBar">
+  <span class="who" id="authWho">👤 Visitante</span>
+  <button id="loginBtn">Entrar</button>
+  <button id="logoutBtn">Sair</button>
+</div>
+
+<!-- ===== MODAL DE LOGIN/CADASTRO ===== -->
+<div id="authOverlay">
+  <div id="authModal">
+    <button id="authClose">×</button>
+    <h3 id="authTitle">Entrar</h3>
+    <div class="sub" id="authSub">Acesse sua conta para salvar simulações</div>
+    <label>Email</label>
+    <input type="email" id="authEmail" placeholder="voce@exemplo.com" autocomplete="email">
+    <label>Senha</label>
+    <input type="password" id="authPass" placeholder="mínimo 6 caracteres" autocomplete="current-password">
+    <button id="authSubmit">Entrar</button>
+    <button id="authToggle">Não tem conta? Cadastre-se</button>
+    <div id="authMsg"></div>
+  </div>
+</div>
 
 <div class="panel" id="controls">
   <div class="panel-header" data-target="controls"><h2>⚙️ Controles</h2><span class="arrow">▶</span></div>
@@ -93,639 +157,295 @@
   </div>
 </div>
 
-<script>
-// ============================================================
-// CONSTANTES FÍSICAS — unidades SI de verdade, sem mágica
-// ============================================================
-const SCALE = 0.005;          // metros por pixel
-const DEPTH = 0.1;            // profundidade dos blocos (m)
-const WATER_DENSITY = 1000;   // kg/m³
-const AIR_DENSITY = 1.2;      // kg/m³
-const FIXED_DT = 1 / 120;
-
-let W = 0, H = 0;
-let gravity = 9.8;            // m/s²
-let viscosityPct = 50;
-let airDragPct = 20;
-let paused = false;
-let simTime = 0;
-
-const canvas = document.getElementById('canvas');
-const ctx = canvas.getContext('2d');
+<!-- Supabase JS via CDN (ESM) -->
+<script type="module">
+import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
 
 // ============================================================
-// SUPERFÍCIE DA ÁGUA (molas + propagação)
+// SUPABASE AUTH — credenciais reais do projeto (anon/publishable key é pública por design)
 // ============================================================
+const SUPABASE_URL = 'https://edirfuymendmudwacxna.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_6GXfJdtNX-QD1776YJnXsw_EOLCrXye';
+const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+let authMode = 'signin'; // 'signin' | 'signup'
+let currentUser = null;
+
+const $ = id => document.getElementById(id);
+const overlay = $('authOverlay');
+const msgEl = $('authMsg');
+
+function setMsg(text, kind) { msgEl.textContent = text; msgEl.className = kind || ''; }
+
+function updateAuthUI(user) {
+  currentUser = user;
+  if (user) {
+    $('authWho').innerHTML = '👤 <b>' + (user.email || 'logado') + '</b>';
+    $('loginBtn').style.display = 'none';
+    $('logoutBtn').style.display = 'inline-block';
+  } else {
+    $('authWho').textContent = '👤 Visitante';
+    $('loginBtn').style.display = 'inline-block';
+    $('logoutBtn').style.display = 'none';
+  }
+}
+
+function openModal(mode) {
+  authMode = mode;
+  const signin = mode === 'signin';
+  $('authTitle').textContent = signin ? 'Entrar' : 'Criar conta';
+  $('authSub').textContent = signin
+    ? 'Acesse sua conta para salvar simulações'
+    : 'Cadastre-se com email e senha (mín. 6 caracteres)';
+  $('authSubmit').textContent = signin ? 'Entrar' : 'Cadastrar';
+  $('authToggle').textContent = signin ? 'Não tem conta? Cadastre-se' : 'Já tem conta? Entrar';
+  setMsg('');
+  overlay.classList.add('open');
+  setTimeout(() => $('authEmail').focus(), 50);
+}
+function closeModal() { overlay.classList.remove('open'); }
+
+$('loginBtn').addEventListener('click', () => openModal('signin'));
+$('authClose').addEventListener('click', closeModal);
+overlay.addEventListener('click', e => { if (e.target === overlay) closeModal(); });
+$('authToggle').addEventListener('click', () => openModal(authMode === 'signin' ? 'signup' : 'signin'));
+
+$('authSubmit').addEventListener('click', async () => {
+  const email = $('authEmail').value.trim();
+  const pass = $('authPass').value;
+  if (!email || !pass) { setMsg('Preencha email e senha.', 'err'); return; }
+  if (pass.length < 6) { setMsg('Senha precisa de pelo menos 6 caracteres.', 'err'); return; }
+  $('authSubmit').disabled = true;
+  setMsg('Processando...', '');
+  try {
+    if (authMode === 'signup') {
+      const { data, error } = await supabase.auth.signUp({ email, password: pass });
+      if (error) throw error;
+      if (data.session) { updateAuthUI(data.user); closeModal(); }
+      else setMsg('✅ Cadastro feito! Confirme o email se pedido, depois entre.', 'ok');
+    } else {
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password: pass });
+      if (error) throw error;
+      updateAuthUI(data.user); closeModal();
+    }
+  } catch (err) {
+    setMsg('❌ ' + (err.message || 'Erro de autenticação.'), 'err');
+  } finally {
+    $('authSubmit').disabled = false;
+  }
+});
+
+$('logoutBtn').addEventListener('click', async () => {
+  await supabase.auth.signOut();
+  updateAuthUI(null);
+});
+
+// Sessão persistida: recupera ao carregar e escuta mudanças em tempo real
+(async () => {
+  const { data } = await supabase.auth.getSession();
+  updateAuthUI(data.session?.user ?? null);
+})();
+supabase.auth.onAuthStateChange((_event, session) => {
+  updateAuthUI(session?.user ?? null);
+});
+
+// Enter submete o formulário
+[$('authEmail'), $('authPass')].forEach(el =>
+  el.addEventListener('keydown', e => { if (e.key === 'Enter') $('authSubmit').click(); }));
+
+// ============================================================
+// FÍSICA — unidades SI de verdade (N, m, kg·m²/s²)
+// ============================================================
+const SCALE = 0.005, DEPTH = 0.1, WATER_DENSITY = 1000, AIR_DENSITY = 1.2, FIXED_DT = 1/120;
+let W = 0, H = 0, gravity = 9.8, viscosityPct = 50, airDragPct = 20, paused = false, simTime = 0;
+const canvas = $('canvas'), ctx = canvas.getContext('2d');
+
 class WaterSurface {
-  constructor() {
-    this.numColumns = 150;
-    this.heights = new Float32Array(this.numColumns);
-    this.velocities = new Float32Array(this.numColumns);
-    this.springK = 0.02;
-    this.spread = 0.25;
-    this.resize();
-  }
-  resize() {
-    this.restY = H * 0.48;
-    this.tankBottom = H * 0.88;
-    this.tankLeft = W * 0.14;
-    this.tankRight = W * 0.86;
-    this.columnWidth = (this.tankRight - this.tankLeft) / this.numColumns;
-  }
-  get damping() { return 0.004 + (viscosityPct / 100) * 0.05; }
+  constructor() { this.numColumns = 150; this.heights = new Float32Array(150);
+    this.velocities = new Float32Array(150); this.springK = 0.02; this.spread = 0.25; this.resize(); }
+  resize() { this.restY = H*0.48; this.tankBottom = H*0.88; this.tankLeft = W*0.14;
+    this.tankRight = W*0.86; this.columnWidth = (this.tankRight-this.tankLeft)/this.numColumns; }
+  get damping() { return 0.004 + (viscosityPct/100)*0.05; }
   update() {
     const n = this.numColumns;
-    for (let i = 0; i < n; i++) {
-      this.velocities[i] += -this.springK * this.heights[i] - this.damping * this.velocities[i];
+    for (let i=0;i<n;i++) this.velocities[i] += -this.springK*this.heights[i] - this.damping*this.velocities[i];
+    for (let p=0;p<4;p++) {
+      const ld=new Float32Array(n), rd=new Float32Array(n);
+      for (let i=0;i<n;i++){ if(i>0){ld[i]=this.spread*(this.heights[i]-this.heights[i-1]);this.velocities[i-1]+=ld[i]*0.5;}
+        if(i<n-1){rd[i]=this.spread*(this.heights[i]-this.heights[i+1]);this.velocities[i+1]+=rd[i]*0.5;} }
+      for (let i=0;i<n;i++){ if(i>0)this.heights[i-1]+=ld[i]*0.25; if(i<n-1)this.heights[i+1]+=rd[i]*0.25; }
     }
-    for (let pass = 0; pass < 4; pass++) {
-      const ld = new Float32Array(n), rd = new Float32Array(n);
-      for (let i = 0; i < n; i++) {
-        if (i > 0)     { ld[i] = this.spread * (this.heights[i] - this.heights[i-1]); this.velocities[i-1] += ld[i] * 0.5; }
-        if (i < n - 1) { rd[i] = this.spread * (this.heights[i] - this.heights[i+1]); this.velocities[i+1] += rd[i] * 0.5; }
-      }
-      for (let i = 0; i < n; i++) {
-        if (i > 0)     this.heights[i-1] += ld[i] * 0.25;
-        if (i < n - 1) this.heights[i+1] += rd[i] * 0.25;
-      }
-    }
-    for (let i = 0; i < n; i++) {
-      this.heights[i] += this.velocities[i];
-      if (this.heights[i] >  70) this.heights[i] =  70;
-      if (this.heights[i] < -70) this.heights[i] = -70;
-    }
+    for (let i=0;i<n;i++){ this.heights[i]+=this.velocities[i];
+      if(this.heights[i]>70)this.heights[i]=70; if(this.heights[i]<-70)this.heights[i]=-70; }
   }
-  getSurfaceY(x) {
-    const relX = x - this.tankLeft;
-    if (relX < 0 || relX > this.tankRight - this.tankLeft) return this.restY;
-    const cf = relX / this.columnWidth;
-    const ci = Math.min(this.numColumns - 2, Math.max(0, Math.floor(cf)));
-    const f = cf - ci;
-    return this.restY + this.heights[ci] + (this.heights[ci+1] - this.heights[ci]) * f;
-  }
-  createWave(x, strengthPx, widthPx = 60) {
-    const ci = Math.floor((x - this.tankLeft) / this.columnWidth);
-    const radius = Math.max(6, Math.round(widthPx / this.columnWidth) + 6);
-    const strength = Math.max(-30, Math.min(30, strengthPx));
-    for (let i = Math.max(0, ci - radius); i < Math.min(this.numColumns, ci + radius); i++) {
-      const f = Math.pow(1 - Math.abs(i - ci) / radius, 2);
-      this.velocities[i] += strength * f;
-    }
-  }
-  flatten() { this.heights.fill(0); this.velocities.fill(0); }
+  getSurfaceY(x){ const r=x-this.tankLeft; if(r<0||r>this.tankRight-this.tankLeft)return this.restY;
+    const cf=r/this.columnWidth, ci=Math.min(this.numColumns-2,Math.max(0,Math.floor(cf))), f=cf-ci;
+    return this.restY+this.heights[ci]+(this.heights[ci+1]-this.heights[ci])*f; }
+  createWave(x, sPx, wPx=60){ const ci=Math.floor((x-this.tankLeft)/this.columnWidth);
+    const rad=Math.max(6,Math.round(wPx/this.columnWidth)+6), s=Math.max(-30,Math.min(30,sPx));
+    for(let i=Math.max(0,ci-rad);i<Math.min(this.numColumns,ci+rad);i++){
+      const f=Math.pow(1-Math.abs(i-ci)/rad,2); this.velocities[i]+=s*f; } }
+  flatten(){ this.heights.fill(0); this.velocities.fill(0); }
 }
 
-// ============================================================
-// PARTÍCULAS
-// ============================================================
 const particles = [];
 class Particle {
-  constructor(x, y, vx, vy, type) {
-    this.x = x; this.y = y; this.vx = vx; this.vy = vy;
-    this.type = type; this.life = 1;
-    this.size = type === 'bubble' ? 2 + Math.random() * 3 : 2 + Math.random() * 4;
-  }
-  update(dt) {
-    if (this.type === 'bubble') {
-      this.vy -= 90 * dt;
-      this.vx += (Math.random() - 0.5) * 50 * dt;
-      this.life -= 0.5 * dt;
-    } else {
-      this.vy += gravity * 60 * dt;
-      this.life -= 1.3 * dt;
-    }
-    this.x += this.vx * dt; this.y += this.vy * dt;
-  }
-  draw(c) {
-    c.globalAlpha = Math.max(0, this.life);
-    if (this.type === 'bubble') {
-      const g = c.createRadialGradient(this.x - this.size*.3, this.y - this.size*.3, 0, this.x, this.y, this.size);
-      g.addColorStop(0, 'rgba(225,242,255,.9)');
-      g.addColorStop(1, 'rgba(110,175,235,.1)');
-      c.fillStyle = g;
-    } else c.fillStyle = 'rgba(150,205,255,.85)';
-    c.beginPath(); c.arc(this.x, this.y, this.size, 0, Math.PI * 2); c.fill();
-    c.globalAlpha = 1;
-  }
+  constructor(x,y,vx,vy,t){ this.x=x;this.y=y;this.vx=vx;this.vy=vy;this.type=t;this.life=1;
+    this.size=t==='bubble'?2+Math.random()*3:2+Math.random()*4; }
+  update(dt){ if(this.type==='bubble'){this.vy-=90*dt;this.vx+=(Math.random()-0.5)*50*dt;this.life-=0.5*dt;}
+    else{this.vy+=gravity*60*dt;this.life-=1.3*dt;} this.x+=this.vx*dt;this.y+=this.vy*dt; }
+  draw(c){ c.globalAlpha=Math.max(0,this.life);
+    if(this.type==='bubble'){ const g=c.createRadialGradient(this.x-this.size*.3,this.y-this.size*.3,0,this.x,this.y,this.size);
+      g.addColorStop(0,'rgba(225,242,255,.9)');g.addColorStop(1,'rgba(110,175,235,.1)');c.fillStyle=g; }
+    else c.fillStyle='rgba(150,205,255,.85)';
+    c.beginPath();c.arc(this.x,this.y,this.size,0,Math.PI*2);c.fill();c.globalAlpha=1; }
 }
 
-// ============================================================
-// CORPO RÍGIDO — física em newtons de verdade
-// ============================================================
 class RigidBody {
-  constructor(type, x, y) {
-    this.type = type;
-    this.spawnX = x; this.spawnY = y;
-    this.x = x; this.y = y;
-    this.vx = 0; this.vy = 0;
-    this.angle = 0; this.angularVel = 0;
-    this.flutterPhase = Math.random() * Math.PI * 2;
-    this.dragging = false; this.hovered = false;
-    this.dragOffX = 0; this.dragOffY = 0;
-    this.sub = { ratio: 0, bx: 0, by: 0, buoyN: 0 };
-    this.prevSub = 0;
-
-    if (type === 'chumbo') {
-      this.width = 70; this.height = 70; this.density = 11340;
-      this.color = '#8a8a8a'; this.colorDark = '#4a4a4a';
-      this.cdAir = 1.05; this.cdWater = 1.05; this.label = 'Chumbo'; this.emoji = '🟫';
-    } else if (type === 'plastico') {
-      this.width = 80; this.height = 80; this.density = 950;
-      this.color = '#4ad66d'; this.colorDark = '#2fa84f';
-      this.cdAir = 1.1; this.cdWater = 1.4; this.label = 'Plástico'; this.emoji = '🟩';
-    } else {
-      this.width = 60; this.height = 20; this.density = 5;
-      this.color = '#ffd866'; this.colorDark = '#d4a830';
-      this.cdAir = 20; this.cdWater = 25; this.label = 'Pena'; this.emoji = '🟨';
-    }
-    const wm = this.width * SCALE, hm = this.height * SCALE;
-    this.volume = wm * hm * DEPTH;
-    this.mass = this.density * this.volume;
-    this.inertia = this.mass * (wm*wm + hm*hm) / 12;
-  }
-
-  corners() {
-    const c = Math.cos(this.angle), s = Math.sin(this.angle);
-    const hw = this.width / 2, hh = this.height / 2;
-    return [[-hw,-hh],[hw,-hh],[hw,hh],[-hw,hh]].map(([lx, ly]) =>
-      [this.x + lx*c - ly*s, this.y + lx*s + ly*c]);
-  }
-
-  computeSubmerged(water) {
-    const surfY = water.getSurfaceY(this.x);
-    const poly = this.corners();
-    const out = [];
-    for (let i = 0; i < poly.length; i++) {
-      const a = poly[i], b = poly[(i+1) % poly.length];
-      const ain = a[1] >= surfY, bin = b[1] >= surfY;
-      if (ain) out.push(a);
-      if (ain !== bin) {
-        const t = (surfY - a[1]) / (b[1] - a[1]);
-        out.push([a[0] + (b[0]-a[0])*t, surfY]);
-      }
-    }
-    if (out.length < 3) { this.sub = { ratio: 0, bx: this.x, by: this.y, buoyN: 0 }; return; }
-    let sum = 0, cx = 0, cy = 0;
-    for (let i = 0; i < out.length; i++) {
-      const [x1,y1] = out[i], [x2,y2] = out[(i+1)%out.length];
-      const cr = x1*y2 - x2*y1;
-      sum += cr; cx += (x1+x2)*cr; cy += (y1+y2)*cr;
-    }
-    const signedArea = sum / 2;
-    if (Math.abs(signedArea) < 1e-6) { this.sub = { ratio: 0, bx: this.x, by: this.y, buoyN: 0 }; return; }
-    cx /= (6 * signedArea); cy /= (6 * signedArea);
-    const area = Math.abs(signedArea);
-    const full = this.width * this.height;
-    const ratio = Math.min(1, area / full);
-    const volM3 = area * SCALE * SCALE * DEPTH;
-    this.sub = { ratio, bx: cx, by: cy, buoyN: WATER_DENSITY * gravity * volM3 };
-  }
-
-  update(dt, water) {
-    this.computeSubmerged(water);
-    const sub = this.sub.ratio;
-
-    if (this.dragging) { this.prevSub = sub; return; }
-
-    let fx = 0, fy = this.mass * gravity;
-    let torque = 0;
-
-    if (sub > 0.001) {
-      fy -= this.sub.buoyN;
-      torque += -this.sub.buoyN * (this.sub.bx - this.x) * SCALE;
-    }
-
-    const speedPx = Math.hypot(this.vx, this.vy);
-    const speedM = speedPx * SCALE;
-    if (speedM > 1e-5) {
-      const inWater = sub > 0.001;
-      const rho = inWater ? WATER_DENSITY : AIR_DENSITY * (0.2 + airDragPct / 25);
-      const cd  = inWater ? this.cdWater : this.cdAir;
-      const projLenPx = Math.abs(Math.cos(this.angle)) * this.width + Math.abs(Math.sin(this.angle)) * this.height;
-      const areaM2 = projLenPx * SCALE * DEPTH;
-      const fD = 0.5 * rho * cd * areaM2 * speedM * speedM;
-      fx -= fD * (this.vx / speedPx);
-      fy -= fD * (this.vy / speedPx);
-      torque -= this.angularVel * fD * 0.0005;
-    }
-
-    if (this.type === 'pena' && sub <= 0.001) {
-      torque += Math.sin(simTime * 5 + this.flutterPhase) * 4e-4;
-      torque -= Math.sin(this.angle) * speedM * 2e-3;
-    }
-
-    this.angularVel *= Math.exp(-(sub > 0.05 ? 4 : 0.6) * dt);
-
-    const axPx = (fx / this.mass) / SCALE;
-    const ayPx = (fy / this.mass) / SCALE;
-    this.vx += axPx * dt; this.vy += ayPx * dt;
-    const angAccel = torque / this.inertia;
-    this.angularVel = Math.max(-6, Math.min(6, this.angularVel + angAccel * dt));
-
-    const sp = Math.hypot(this.vx, this.vy);
-    if (sp > 1200) { this.vx *= 1200/sp; this.vy *= 1200/sp; }
-    this.x += this.vx * dt; this.y += this.vy * dt;
-    this.angle += this.angularVel * dt;
-
-    const hw = this.width/2, hh = this.height/2;
-    if (this.x - hw < water.tankLeft)  { this.x = water.tankLeft + hw;  this.vx =  Math.abs(this.vx)*0.3; }
-    if (this.x + hw > water.tankRight) { this.x = water.tankRight - hw; this.vx = -Math.abs(this.vx)*0.3; }
-    if (this.y + hh > water.tankBottom) {
-      this.y = water.tankBottom - hh;
-      this.vy = Math.abs(this.vy) < 30 ? 0 : -Math.abs(this.vy)*0.15;
-      this.vx *= 0.85; this.angularVel *= 0.7;
-    }
-    if (this.y - hh < 0) { this.y = hh; this.vy = Math.abs(this.vy)*0.3; }
-
-    if (sub > 0.05 && this.prevSub <= 0.05 && this.vy > 40) {
-      water.createWave(this.x, this.vy * 0.06, this.width);
-      const nSplash = Math.min(18, Math.floor(this.vy * 0.04));
-      for (let i = 0; i < nSplash; i++) {
-        particles.push(new Particle(
-          this.x + (Math.random()-0.5)*this.width, water.getSurfaceY(this.x),
-          (Math.random()-0.5)*220, -120 - Math.random()*this.vy*1.2, 'splash'));
-      }
-    }
-    if (sub > 0.3 && this.vy > 30 && Math.random() < 0.5) {
-      particles.push(new Particle(
-        this.x + (Math.random()-0.5)*this.width*0.8, this.y - hh,
-        (Math.random()-0.5)*25, -20 - Math.random()*40, 'bubble'));
-    }
-    this.prevSub = sub;
-  }
-
-  draw(c, water) {
-    const sub = this.sub.ratio;
-    c.save();
-    c.translate(this.x, this.y); c.rotate(this.angle);
-    if (this.hovered || this.dragging) {
-      c.strokeStyle = 'rgba(255,220,80,.9)'; c.lineWidth = 2;
-      c.strokeRect(-this.width/2-4, -this.height/2-4, this.width+8, this.height+8);
-    }
-    const g = c.createLinearGradient(-this.width/2, -this.height/2, this.width/2, this.height/2);
-    g.addColorStop(0, this.color); g.addColorStop(1, this.colorDark);
-    c.fillStyle = g;
-    c.fillRect(-this.width/2, -this.height/2, this.width, this.height);
-    if (this.type === 'plastico') {
-      c.strokeStyle = 'rgba(255,255,255,.15)'; c.lineWidth = 1;
-      for (let i = -this.height/2+10; i < this.height/2; i += 10) {
-        c.beginPath(); c.moveTo(-this.width/2+5, i); c.lineTo(this.width/2-5, i); c.stroke();
-      }
-    } else if (this.type === 'pena') {
-      c.strokeStyle = 'rgba(200,170,60,.6)'; c.lineWidth = 0.8;
-      for (let i = -this.width/2+5; i < this.width/2-5; i += 4) {
-        c.beginPath(); c.moveTo(i, 0); c.lineTo(i+2, -this.height/2*0.7);
-        c.moveTo(i, 0); c.lineTo(i+2, this.height/2*0.7); c.stroke();
-      }
-      c.strokeStyle = 'rgba(150,120,40,.8)'; c.lineWidth = 1.5;
-      c.beginPath(); c.moveTo(-this.width/2, 0); c.lineTo(this.width/2, 0); c.stroke();
-    } else {
-      c.fillStyle = 'rgba(220,220,220,.15)';
-      for (let i = 0; i < 8; i++) {
-        c.beginPath();
-        c.arc(Math.sin(i*1.7)*this.width*0.35, Math.cos(i*2.3)*this.height*0.35, 2, 0, Math.PI*2);
-        c.fill();
-      }
-    }
-    c.strokeStyle = 'rgba(0,0,0,.4)'; c.lineWidth = 1.5;
-    c.strokeRect(-this.width/2, -this.height/2, this.width, this.height);
-    c.fillStyle = 'rgba(255,255,255,.22)';
-    c.fillRect(-this.width/2, -this.height/2, this.width, Math.max(3, this.height*0.18));
-    c.restore();
-
-    if (sub > 0.05) {
-      const surfY = water.getSurfaceY(this.x);
-      const top = Math.max(surfY, this.y - this.height/2);
-      const bot = this.y + this.height/2;
-      if (bot > top) {
-        c.fillStyle = 'rgba(90,160,230,.28)';
-        c.fillRect(this.x - this.width/2, top, this.width, bot - top);
-      }
-    }
-  }
-
-  drawLabel(c) {
-    const text = this.emoji + ' ' + this.label;
-    c.font = 'bold 13px sans-serif';
-    const tw = c.measureText(text).width;
-    const lx = this.x, ly = this.y - this.height/2 - 26;
-    c.fillStyle = 'rgba(5,8,18,.75)';
-    c.beginPath();
-    if (c.roundRect) c.roundRect(lx - tw/2 - 7, ly - 14, tw + 14, 20, 5);
-    else c.rect(lx - tw/2 - 7, ly - 14, tw + 14, 20);
-    c.fill();
-    c.fillStyle = '#fff'; c.textAlign = 'center'; c.textBaseline = 'middle';
-    c.fillText(text, lx, ly - 3);
-  }
-
-  contains(px, py) {
-    return px >= this.x - this.width/2 - 6 && px <= this.x + this.width/2 + 6 &&
-           py >= this.y - this.height/2 - 6 && py <= this.y + this.height/2 + 6;
-  }
+  constructor(type,x,y){ this.type=type;this.x=x;this.y=y;this.vx=0;this.vy=0;this.angle=0;this.angularVel=0;
+    this.flutterPhase=Math.random()*Math.PI*2;this.dragging=false;this.hovered=false;
+    this.dragOffX=0;this.dragOffY=0;this.sub={ratio:0,bx:0,by:0,buoyN:0};this.prevSub=0;
+    if(type==='chumbo'){this.width=70;this.height=70;this.density=11340;this.color='#8a8a8a';this.colorDark='#4a4a4a';
+      this.cdAir=1.05;this.cdWater=1.05;this.label='Chumbo';this.emoji='🟫';}
+    else if(type==='plastico'){this.width=80;this.height=80;this.density=950;this.color='#4ad66d';this.colorDark='#2fa84f';
+      this.cdAir=1.1;this.cdWater=1.4;this.label='Plástico';this.emoji='🟩';}
+    else{this.width=60;this.height=20;this.density=5;this.color='#ffd866';this.colorDark='#d4a830';
+      this.cdAir=20;this.cdWater=25;this.label='Pena';this.emoji='🟨';}
+    const wm=this.width*SCALE,hm=this.height*SCALE;
+    this.volume=wm*hm*DEPTH;this.mass=this.density*this.volume;
+    this.inertia=this.mass*(wm*wm+hm*hm)/12; }
+  corners(){ const c=Math.cos(this.angle),s=Math.sin(this.angle),hw=this.width/2,hh=this.height/2;
+    return [[-hw,-hh],[hw,-hh],[hw,hh],[-hw,hh]].map(([lx,ly])=>[this.x+lx*c-ly*s,this.y+lx*s+ly*c]); }
+  computeSubmerged(water){ const surfY=water.getSurfaceY(this.x),poly=this.corners(),out=[];
+    for(let i=0;i<poly.length;i++){ const a=poly[i],b=poly[(i+1)%poly.length],ain=a[1]>=surfY,bin=b[1]>=surfY;
+      if(ain)out.push(a); if(ain!==bin){const t=(surfY-a[1])/(b[1]-a[1]);out.push([a[0]+(b[0]-a[0])*t,surfY]);} }
+    if(out.length<3){this.sub={ratio:0,bx:this.x,by:this.y,buoyN:0};return;}
+    let sum=0,cx=0,cy=0;
+    for(let i=0;i<out.length;i++){const[x1,y1]=out[i],[x2,y2]=out[(i+1)%out.length],cr=x1*y2-x2*y1;sum+=cr;cx+=(x1+x2)*cr;cy+=(y1+y2)*cr;}
+    const signedArea=sum/2;
+    if(Math.abs(signedArea)<1e-6){this.sub={ratio:0,bx:this.x,by:this.y,buoyN:0};return;}
+    cx/=(6*signedArea); cy/=(6*signedArea);
+    const area=Math.abs(signedArea);
+    const volM3=area*SCALE*SCALE*DEPTH;
+    this.sub={ratio:Math.min(1,area/(this.width*this.height)),bx:cx,by:cy,buoyN:WATER_DENSITY*gravity*volM3}; }
+  update(dt,water){ this.computeSubmerged(water); const sub=this.sub.ratio;
+    if(this.dragging){this.prevSub=sub;return;}
+    let fx=0,fy=this.mass*gravity,torque=0;
+    if(sub>0.001){ fy-=this.sub.buoyN; torque+=-this.sub.buoyN*(this.sub.bx-this.x)*SCALE; }
+    const spPx=Math.hypot(this.vx,this.vy),spM=spPx*SCALE;
+    if(spM>1e-5){ const inW=sub>0.001,rho=inW?WATER_DENSITY:AIR_DENSITY*(0.2+airDragPct/25),
+        cd=inW?this.cdWater:this.cdAir,
+        proj=Math.abs(Math.cos(this.angle))*this.width+Math.abs(Math.sin(this.angle))*this.height,
+        A=proj*SCALE*DEPTH,fD=0.5*rho*cd*A*spM*spM;
+      fx-=fD*(this.vx/spPx);fy-=fD*(this.vy/spPx);torque-=this.angularVel*fD*0.0005; }
+    if(this.type==='pena'&&sub<=0.001){ torque+=Math.sin(simTime*5+this.flutterPhase)*4e-4;
+      torque-=Math.sin(this.angle)*spM*2e-3; }
+    this.angularVel*=Math.exp(-(sub>0.05?4:0.6)*dt);
+    this.vx+=(fx/this.mass)/SCALE*dt; this.vy+=(fy/this.mass)/SCALE*dt;
+    this.angularVel=Math.max(-6,Math.min(6,this.angularVel+torque/this.inertia*dt));
+    const sp=Math.hypot(this.vx,this.vy); if(sp>1200){this.vx*=1200/sp;this.vy*=1200/sp;}
+    this.x+=this.vx*dt;this.y+=this.vy*dt;this.angle+=this.angularVel*dt;
+    const hw=this.width/2,hh=this.height/2;
+    if(this.x-hw<water.tankLeft){this.x=water.tankLeft+hw;this.vx=Math.abs(this.vx)*0.3;}
+    if(this.x+hw>water.tankRight){this.x=water.tankRight-hw;this.vx=-Math.abs(this.vx)*0.3;}
+    if(this.y+hh>water.tankBottom){this.y=water.tankBottom-hh;this.vy=Math.abs(this.vy)<30?0:-Math.abs(this.vy)*0.15;this.vx*=0.85;this.angularVel*=0.7;}
+    if(this.y-hh<0){this.y=hh;this.vy=Math.abs(this.vy)*0.3;}
+    if(sub>0.05&&this.prevSub<=0.05&&this.vy>40){ water.createWave(this.x,this.vy*0.06,this.width);
+      const n=Math.min(18,Math.floor(this.vy*0.04));
+      for(let i=0;i<n;i++)particles.push(new Particle(this.x+(Math.random()-0.5)*this.width,water.getSurfaceY(this.x),(Math.random()-0.5)*220,-120-Math.random()*this.vy*1.2,'splash')); }
+    if(sub>0.3&&this.vy>30&&Math.random()<0.5)particles.push(new Particle(this.x+(Math.random()-0.5)*this.width*0.8,this.y-hh,(Math.random()-0.5)*25,-20-Math.random()*40,'bubble'));
+    this.prevSub=sub; }
+  draw(c,water){ const sub=this.sub.ratio; c.save();c.translate(this.x,this.y);c.rotate(this.angle);
+    if(this.hovered||this.dragging){c.strokeStyle='rgba(255,220,80,.9)';c.lineWidth=2;c.strokeRect(-this.width/2-4,-this.height/2-4,this.width+8,this.height+8);}
+    const g=c.createLinearGradient(-this.width/2,-this.height/2,this.width/2,this.height/2);g.addColorStop(0,this.color);g.addColorStop(1,this.colorDark);c.fillStyle=g;
+    c.fillRect(-this.width/2,-this.height/2,this.width,this.height);
+    if(this.type==='plastico'){c.strokeStyle='rgba(255,255,255,.15)';c.lineWidth=1;for(let i=-this.height/2+10;i<this.height/2;i+=10){c.beginPath();c.moveTo(-this.width/2+5,i);c.lineTo(this.width/2-5,i);c.stroke();}}
+    else if(this.type==='pena'){c.strokeStyle='rgba(200,170,60,.6)';c.lineWidth=0.8;for(let i=-this.width/2+5;i<this.width/2-5;i+=4){c.beginPath();c.moveTo(i,0);c.lineTo(i+2,-this.height/2*0.7);c.moveTo(i,0);c.lineTo(i+2,this.height/2*0.7);c.stroke();}
+      c.strokeStyle='rgba(150,120,40,.8)';c.lineWidth=1.5;c.beginPath();c.moveTo(-this.width/2,0);c.lineTo(this.width/2,0);c.stroke();}
+    else{c.fillStyle='rgba(220,220,220,.15)';for(let i=0;i<8;i++){c.beginPath();c.arc(Math.sin(i*1.7)*this.width*0.35,Math.cos(i*2.3)*this.height*0.35,2,0,Math.PI*2);c.fill();}}
+    c.strokeStyle='rgba(0,0,0,.4)';c.lineWidth=1.5;c.strokeRect(-this.width/2,-this.height/2,this.width,this.height);
+    c.fillStyle='rgba(255,255,255,.22)';c.fillRect(-this.width/2,-this.height/2,this.width,Math.max(3,this.height*0.18));c.restore();
+    if(sub>0.05){const sY=water.getSurfaceY(this.x),top=Math.max(sY,this.y-this.height/2),bot=this.y+this.height/2;
+      if(bot>top){c.fillStyle='rgba(90,160,230,.28)';c.fillRect(this.x-this.width/2,top,this.width,bot-top);}} }
+  drawLabel(c){ const t=this.emoji+' '+this.label; c.font='bold 13px sans-serif';const tw=c.measureText(t).width,lx=this.x,ly=this.y-this.height/2-26;
+    c.fillStyle='rgba(5,8,18,.75)';c.beginPath();if(c.roundRect)c.roundRect(lx-tw/2-7,ly-14,tw+14,20,5);else c.rect(lx-tw/2-7,ly-14,tw+14,20);c.fill();
+    c.fillStyle='#fff';c.textAlign='center';c.textBaseline='middle';c.fillText(t,lx,ly-3); }
+  contains(px,py){ return px>=this.x-this.width/2-6&&px<=this.x+this.width/2+6&&py>=this.y-this.height/2-6&&py<=this.y+this.height/2+6; }
 }
 
-// ============================================================
-// SETUP / RESET / DROP
-// ============================================================
-const water = new WaterSurface();
-let objects = [];
+const water = new WaterSurface(); let objects = [];
+function placeAll(){ const spots={chumbo:0.30,plastico:0.50,pena:0.42};
+  for(const o of objects){ o.x=water.tankLeft+(water.tankRight-water.tankLeft)*spots[o.type]; o.y=H*0.12+(o.type==='pena'?-H*0.04:0);
+    o.vx=0;o.vy=0;o.angle=(Math.random()-0.5)*0.3;o.angularVel=0;o.prevSub=0;o.dragging=false; } }
+function resetSimulation(){ objects=[new RigidBody('chumbo',0,0),new RigidBody('plastico',0,0),new RigidBody('pena',0,0)];
+  particles.length=0;water.flatten();placeAll();dragObj=null;hoverObj=null; }
+function dropObjects(){ particles.length=0;placeAll();dragObj=null;hoverObj=null; }
+function resize(){ W=canvas.width=window.innerWidth;H=canvas.height=window.innerHeight;water.resize(); }
+window.addEventListener('resize',resize); resize(); resetSimulation();
 
-let dragObj = null, hoverObj = null;
-let lastPX = 0, lastPY = 0, lastPT = 0, throwVX = 0, throwVY = 0;
+let dragObj=null,hoverObj=null,lastPX=0,lastPY=0,lastPT=0,throwVX=0,throwVY=0;
+function ppos(e){const r=canvas.getBoundingClientRect();return[e.clientX-r.left,e.clientY-r.top];}
+canvas.addEventListener('pointerdown',e=>{const[px,py]=ppos(e);
+  for(let i=objects.length-1;i>=0;i--)if(objects[i].contains(px,py)){dragObj=objects[i];dragObj.dragging=true;
+    dragObj.dragOffX=px-dragObj.x;dragObj.dragOffY=py-dragObj.y;throwVX=0;throwVY=0;lastPX=px;lastPY=py;lastPT=performance.now();
+    canvas.setPointerCapture(e.pointerId);return;}
+  if(px>water.tankLeft&&px<water.tankRight&&py>water.getSurfaceY(px)){water.createWave(px,16,50);
+    for(let i=0;i<8;i++)particles.push(new Particle(px,water.getSurfaceY(px),(Math.random()-0.5)*160,-80-Math.random()*120,'splash'));} });
+canvas.addEventListener('pointermove',e=>{const[px,py]=ppos(e);
+  if(dragObj){const now=performance.now(),dt=Math.max(0.008,(now-lastPT)/1000);
+    throwVX=0.6*throwVX+0.4*((px-lastPX)/dt);throwVY=0.6*throwVY+0.4*((py-lastPY)/dt);lastPX=px;lastPY=py;lastPT=now;
+    dragObj.x=px-dragObj.dragOffX;dragObj.y=py-dragObj.dragOffY;dragObj.vx=0;dragObj.vy=0;}
+  else{hoverObj=null;for(let i=objects.length-1;i>=0;i--)if(objects[i].contains(px,py)){hoverObj=objects[i];break;}
+    canvas.style.cursor=hoverObj?'grab':'default';}
+  for(const o of objects)o.hovered=(o===hoverObj||o===dragObj); });
+canvas.addEventListener('pointerup',()=>{if(dragObj){dragObj.dragging=false;dragObj.vx=Math.max(-900,Math.min(900,throwVX));dragObj.vy=Math.max(-900,Math.min(900,throwVY));dragObj=null;}});
 
-function resize() {
-  W = canvas.width = window.innerWidth;
-  H = canvas.height = window.innerHeight;
-  water.resize();
-}
-window.addEventListener('resize', resize);
-resize();
+$('gravity').addEventListener('input',e=>{gravity=parseFloat(e.target.value);$('gravityVal').textContent=gravity.toFixed(1);
+  document.querySelectorAll('.chip').forEach(c=>c.classList.toggle('active',Math.abs(parseFloat(c.dataset.g)-gravity)<0.05));});
+document.querySelectorAll('.chip').forEach(c=>c.addEventListener('click',()=>{$('gravity').value=c.dataset.g;$('gravity').dispatchEvent(new Event('input'));}));
+$('viscosity').addEventListener('input',e=>{viscosityPct=parseFloat(e.target.value);$('viscosityVal').textContent=viscosityPct+'%';});
+$('airDrag').addEventListener('input',e=>{airDragPct=parseFloat(e.target.value);$('airDragVal').textContent=airDragPct+'%';});
+$('resetBtn').addEventListener('click',resetSimulation);
+$('dropBtn').addEventListener('click',dropObjects);
+$('waveBtn').addEventListener('click',()=>{const x=water.tankLeft+(water.tankRight-water.tankLeft)*(0.3+Math.random()*0.4);water.createWave(x,26,90);});
+function togglePause(){paused=!paused;$('pauseBtn').textContent=paused?'▶ Retomar (P)':'⏸ Pausar (P)';}
+$('pauseBtn').addEventListener('click',togglePause);
+window.addEventListener('keydown',e=>{if((e.key==='p'||e.key==='P')&&document.activeElement.tagName!=='INPUT')togglePause();});
+document.querySelectorAll('.panel-header').forEach(h=>h.addEventListener('click',()=>document.getElementById(h.dataset.target).classList.toggle('collapsed')));
 
-function placeAll() {
-  const spots = { chumbo: 0.30, plastico: 0.50, pena: 0.42 };
-  for (const o of objects) {
-    o.x = water.tankLeft + (water.tankRight - water.tankLeft) * spots[o.type];
-    o.y = H * 0.12 + (o.type === 'pena' ? -H*0.04 : 0);
-    o.vx = 0; o.vy = 0;
-    o.angle = (Math.random()-0.5) * 0.3;
-    o.angularVel = 0; o.prevSub = 0; o.dragging = false;
-  }
-}
-function resetSimulation() {
-  objects = [
-    new RigidBody('chumbo', 0, 0),
-    new RigidBody('plastico', 0, 0),
-    new RigidBody('pena', 0, 0)
-  ];
-  particles.length = 0;
-  water.flatten();
-  placeAll();
-  dragObj = null; hoverObj = null;
-}
-function dropObjects() {
-  particles.length = 0;
-  placeAll();
-  dragObj = null; hoverObj = null;
-}
-resetSimulation();
+function drawTank(){ ctx.fillStyle='#232c47';ctx.fillRect(water.tankLeft,water.tankBottom,water.tankRight-water.tankLeft,H-water.tankBottom);
+  ctx.fillStyle='rgba(255,255,255,.05)';for(let i=0;i<14;i++){ctx.beginPath();ctx.ellipse(water.tankLeft+(i+0.5)*(water.tankRight-water.tankLeft)/14,water.tankBottom+20+(i%3)*18,42,12,0.2*(i%4),0,Math.PI*2);ctx.fill();}
+  ctx.strokeStyle='rgba(160,220,255,.06)';ctx.lineWidth=3;for(let i=0;i<6;i++){ctx.beginPath();for(let x=water.tankLeft;x<=water.tankRight;x+=24){const y=water.tankBottom+14+i*14+Math.sin(x*0.02+simTime*1.4+i)*5;x===water.tankLeft?ctx.moveTo(x,y):ctx.lineTo(x,y);}ctx.stroke();}
+  const wg=ctx.createLinearGradient(0,0,0,H);wg.addColorStop(0,'rgba(160,210,255,.5)');wg.addColorStop(1,'rgba(160,210,255,.15)');ctx.strokeStyle=wg;ctx.lineWidth=3;
+  ctx.beginPath();ctx.moveTo(water.tankLeft,H*0.06);ctx.lineTo(water.tankLeft,water.tankBottom);ctx.moveTo(water.tankRight,H*0.06);ctx.lineTo(water.tankRight,water.tankBottom);ctx.stroke(); }
+function drawWater(){ const grad=ctx.createLinearGradient(0,water.restY,0,water.tankBottom);grad.addColorStop(0,'rgba(120,180,225,.85)');grad.addColorStop(1,'rgba(35,80,150,.92)');ctx.fillStyle=grad;
+  ctx.beginPath();ctx.moveTo(water.tankLeft,water.getSurfaceY(water.tankLeft));
+  for(let i=0;i<=water.numColumns;i++){const x=Math.min(water.tankLeft+i*water.columnWidth,water.tankRight);ctx.lineTo(x,water.getSurfaceY(x));}
+  ctx.lineTo(water.tankRight,water.tankBottom);ctx.lineTo(water.tankLeft,water.tankBottom);ctx.closePath();ctx.fill();
+  ctx.strokeStyle='rgba(240,250,255,.85)';ctx.lineWidth=2;ctx.beginPath();
+  for(let i=0;i<=water.numColumns;i++){const x=Math.min(water.tankLeft+i*water.columnWidth,water.tankRight),y=water.getSurfaceY(x);i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);}ctx.stroke();
+  for(let i=0;i<water.numColumns;i++){const v=Math.abs(water.velocities[i]);if(v>2.2){ctx.fillStyle=`rgba(255,255,255,${Math.min(0.7,(v-2.2)*0.12)})`;const x=water.tankLeft+i*water.columnWidth;ctx.beginPath();ctx.arc(x,water.restY+water.heights[i],2.2,0,Math.PI*2);ctx.fill();}}
+  ctx.strokeStyle='rgba(220,240,255,.5)';ctx.lineWidth=2;for(const side of[water.tankLeft,water.tankRight]){const dir=side===water.tankLeft?1:-1,y0=water.getSurfaceY(side);ctx.beginPath();ctx.moveTo(side,y0-7);ctx.quadraticCurveTo(side+dir*4,y0-2,side+dir*14,y0);ctx.stroke();}
+  for(const o of objects)if(o.sub.ratio<0.5){const sy=water.getSurfaceY(o.x),dist=sy-(o.y+o.height/2);if(dist>-10&&dist<160){ctx.save();ctx.globalAlpha=0.10*(1-dist/160);ctx.translate(o.x,sy);ctx.scale(1,-1);ctx.fillStyle=o.color;ctx.fillRect(-o.width/2,-Math.min(46,o.height),o.width,Math.min(46,o.height));ctx.restore();}} }
+function drawTooltip(o){ const lines=[o.emoji+' '+o.label,'Peso: '+(o.mass*gravity).toFixed(3)+' N','Empuxo: '+o.sub.buoyN.toFixed(3)+' N','Submersão: '+Math.round(o.sub.ratio*100)+'%'];
+  ctx.font='12.5px sans-serif';const wBox=Math.max(...lines.map(l=>ctx.measureText(l).width))+22,bx=o.x-o.width/2-wBox-14,by=o.y-46;
+  ctx.fillStyle='rgba(8,10,20,.88)';ctx.beginPath();if(ctx.roundRect)ctx.roundRect(bx,by,wBox,82,7);else ctx.rect(bx,by,wBox,82);ctx.fill();
+  ctx.textAlign='left';ctx.textBaseline='top';lines.forEach((l,i)=>{ctx.fillStyle=i===0?(o.type==='plastico'?'#4ad66d':o.type==='chumbo'?'#c08080':'#ffd866'):'#c9d4ee';ctx.fillText(l,bx+11,by+9+i*19);}); }
 
-// ============================================================
-// INPUT
-// ============================================================
-function pointerPos(e) {
-  const r = canvas.getBoundingClientRect();
-  return [e.clientX - r.left, e.clientY - r.top];
-}
-canvas.addEventListener('pointerdown', e => {
-  const [px, py] = pointerPos(e);
-  for (let i = objects.length - 1; i >= 0; i--) {
-    if (objects[i].contains(px, py)) {
-      dragObj = objects[i];
-      dragObj.dragging = true;
-      dragObj.dragOffX = px - dragObj.x;
-      dragObj.dragOffY = py - dragObj.y;
-      throwVX = 0; throwVY = 0;
-      lastPX = px; lastPY = py; lastPT = performance.now();
-      canvas.setPointerCapture(e.pointerId);
-      return;
-    }
-  }
-  if (px > water.tankLeft && px < water.tankRight && py > water.getSurfaceY(px)) {
-    water.createWave(px, 16, 50);
-    for (let i = 0; i < 8; i++)
-      particles.push(new Particle(px, water.getSurfaceY(px), (Math.random()-0.5)*160, -80-Math.random()*120, 'splash'));
-  }
-});
-canvas.addEventListener('pointermove', e => {
-  const [px, py] = pointerPos(e);
-  if (dragObj) {
-    const now = performance.now();
-    const dt = Math.max(0.008, (now - lastPT) / 1000);
-    throwVX = 0.6*throwVX + 0.4*((px - lastPX)/dt);
-    throwVY = 0.6*throwVY + 0.4*((py - lastPY)/dt);
-    lastPX = px; lastPY = py; lastPT = now;
-    dragObj.x = px - dragObj.dragOffX;
-    dragObj.y = py - dragObj.dragOffY;
-    dragObj.vx = 0; dragObj.vy = 0;
-  } else {
-    hoverObj = null;
-    for (let i = objects.length - 1; i >= 0; i--) {
-      if (objects[i].contains(px, py)) { hoverObj = objects[i]; break; }
-    }
-    canvas.style.cursor = hoverObj ? 'grab' : 'default';
-  }
-  for (const o of objects) o.hovered = (o === hoverObj || o === dragObj);
-});
-canvas.addEventListener('pointerup', e => {
-  if (dragObj) {
-    dragObj.dragging = false;
-    dragObj.vx = Math.max(-900, Math.min(900, throwVX));
-    dragObj.vy = Math.max(-900, Math.min(900, throwVY));
-    dragObj = null;
-  }
-});
-
-// ============================================================
-// UI
-// ============================================================
-const $ = id => document.getElementById(id);
-$('gravity').addEventListener('input', e => {
-  gravity = parseFloat(e.target.value);
-  $('gravityVal').textContent = gravity.toFixed(1);
-  document.querySelectorAll('.chip').forEach(c =>
-    c.classList.toggle('active', Math.abs(parseFloat(c.dataset.g) - gravity) < 0.05));
-});
-document.querySelectorAll('.chip').forEach(c => c.addEventListener('click', () => {
-  $('gravity').value = c.dataset.g;
-  $('gravity').dispatchEvent(new Event('input'));
-}));
-$('viscosity').addEventListener('input', e => {
-  viscosityPct = parseFloat(e.target.value);
-  $('viscosityVal').textContent = viscosityPct + '%';
-});
-$('airDrag').addEventListener('input', e => {
-  airDragPct = parseFloat(e.target.value);
-  $('airDragVal').textContent = airDragPct + '%';
-});
-$('resetBtn').addEventListener('click', resetSimulation);
-$('dropBtn').addEventListener('click', dropObjects);
-$('waveBtn').addEventListener('click', () => {
-  const x = water.tankLeft + (water.tankRight - water.tankLeft) * (0.3 + Math.random()*0.4);
-  water.createWave(x, 26, 90);
-});
-function togglePause() {
-  paused = !paused;
-  $('pauseBtn').textContent = paused ? '▶ Retomar (P)' : '⏸ Pausar (P)';
-}
-$('pauseBtn').addEventListener('click', togglePause);
-window.addEventListener('keydown', e => {
-  if ((e.key === 'p' || e.key === 'P') && e.target.tagName !== 'INPUT') togglePause();
-});
-document.querySelectorAll('.panel-header').forEach(h => h.addEventListener('click', () => {
-  document.getElementById(h.dataset.target).classList.toggle('collapsed');
-}));
-
-// ============================================================
-// RENDER
-// ============================================================
-function drawTank() {
-  ctx.fillStyle = '#232c47';
-  ctx.fillRect(water.tankLeft, water.tankBottom, water.tankRight - water.tankLeft, H - water.tankBottom);
-  ctx.fillStyle = 'rgba(255,255,255,.05)';
-  for (let i = 0; i < 14; i++) {
-    ctx.beginPath();
-    ctx.ellipse(water.tankLeft + (i+0.5)*(water.tankRight-water.tankLeft)/14,
-      water.tankBottom + 20 + (i%3)*18, 42, 12, 0.2*(i%4), 0, Math.PI*2);
-    ctx.fill();
-  }
-  ctx.strokeStyle = 'rgba(160,220,255,.06)'; ctx.lineWidth = 3;
-  for (let i = 0; i < 6; i++) {
-    ctx.beginPath();
-    for (let x = water.tankLeft; x <= water.tankRight; x += 24) {
-      const y = water.tankBottom + 14 + i*14 + Math.sin(x*0.02 + simTime*1.4 + i)*5;
-      x === water.tankLeft ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
-    }
-    ctx.stroke();
-  }
-  const wg = ctx.createLinearGradient(0, 0, 0, H);
-  wg.addColorStop(0, 'rgba(160,210,255,.5)'); wg.addColorStop(1, 'rgba(160,210,255,.15)');
-  ctx.strokeStyle = wg; ctx.lineWidth = 3;
-  ctx.beginPath();
-  ctx.moveTo(water.tankLeft, H*0.06);  ctx.lineTo(water.tankLeft, water.tankBottom);
-  ctx.moveTo(water.tankRight, H*0.06); ctx.lineTo(water.tankRight, water.tankBottom);
-  ctx.stroke();
-}
-
-function drawWater() {
-  const grad = ctx.createLinearGradient(0, water.restY, 0, water.tankBottom);
-  grad.addColorStop(0, 'rgba(120,180,225,.85)');
-  grad.addColorStop(1, 'rgba(35,80,150,.92)');
-  ctx.fillStyle = grad;
-  ctx.beginPath();
-  ctx.moveTo(water.tankLeft, water.getSurfaceY(water.tankLeft));
-  for (let i = 0; i <= water.numColumns; i++) {
-    const x = water.tankLeft + i * water.columnWidth;
-    ctx.lineTo(Math.min(x, water.tankRight), water.getSurfaceY(Math.min(x, water.tankRight)));
-  }
-  ctx.lineTo(water.tankRight, water.tankBottom);
-  ctx.lineTo(water.tankLeft, water.tankBottom);
-  ctx.closePath(); ctx.fill();
-
-  ctx.strokeStyle = 'rgba(240,250,255,.85)'; ctx.lineWidth = 2;
-  ctx.beginPath();
-  for (let i = 0; i <= water.numColumns; i++) {
-    const x = Math.min(water.tankLeft + i * water.columnWidth, water.tankRight);
-    const y = water.getSurfaceY(x);
-    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
-  }
-  ctx.stroke();
-  for (let i = 0; i < water.numColumns; i++) {
-    const v = Math.abs(water.velocities[i]);
-    if (v > 2.2) {
-      ctx.fillStyle = `rgba(255,255,255,${Math.min(0.7, (v-2.2)*0.12)})`;
-      const x = water.tankLeft + i*water.columnWidth;
-      ctx.beginPath(); ctx.arc(x, water.restY + water.heights[i], 2.2, 0, Math.PI*2); ctx.fill();
-    }
-  }
-  ctx.strokeStyle = 'rgba(220,240,255,.5)'; ctx.lineWidth = 2;
-  for (const side of [water.tankLeft, water.tankRight]) {
-    const dir = side === water.tankLeft ? 1 : -1;
-    const y0 = water.getSurfaceY(side);
-    ctx.beginPath(); ctx.moveTo(side, y0 - 7);
-    ctx.quadraticCurveTo(side + dir*4, y0 - 2, side + dir*14, y0);
-    ctx.stroke();
-  }
-  for (const o of objects) {
-    if (o.sub.ratio < 0.5) {
-      const sy = water.getSurfaceY(o.x);
-      const dist = sy - (o.y + o.height/2);
-      if (dist > -10 && dist < 160) {
-        ctx.save();
-        ctx.globalAlpha = 0.10 * (1 - dist/160);
-        ctx.translate(o.x, sy); ctx.scale(1, -1);
-        ctx.fillStyle = o.color;
-        ctx.fillRect(-o.width/2, -Math.min(46, o.height), o.width, Math.min(46, o.height));
-        ctx.restore();
-      }
-    }
-  }
-}
-
-function drawTooltip(o) {
-  const lines = [
-    o.emoji + ' ' + o.label,
-    'Peso: ' + (o.mass * gravity).toFixed(3) + ' N',
-    'Empuxo: ' + o.sub.buoyN.toFixed(3) + ' N',
-    'Submersão: ' + Math.round(o.sub.ratio * 100) + '%'
-  ];
-  ctx.font = '12.5px sans-serif';
-  const wBox = Math.max(...lines.map(l => ctx.measureText(l).width)) + 22;
-  const bx = o.x - o.width/2 - wBox - 14, by = o.y - 46;
-  ctx.fillStyle = 'rgba(8,10,20,.88)';
-  ctx.beginPath();
-  if (ctx.roundRect) ctx.roundRect(bx, by, wBox, 82, 7); else ctx.rect(bx, by, wBox, 82);
-  ctx.fill();
-  ctx.textAlign = 'left'; ctx.textBaseline = 'top';
-  lines.forEach((l, i) => {
-    ctx.fillStyle = i === 0
-      ? (o.type === 'plastico' ? '#4ad66d' : o.type === 'chumbo' ? '#c08080' : '#ffd866')
-      : '#c9d4ee';
-    ctx.fillText(l, bx + 11, by + 9 + i * 19);
-  });
-}
-
-let lastTime = performance.now(), accumulator = 0, fpsSmooth = 60;
-function loop() {
-  const now = performance.now();
-  let frameDt = Math.min(0.05, (now - lastTime) / 1000);
-  lastTime = now;
-  fpsSmooth = fpsSmooth * 0.92 + (1 / Math.max(1e-4, frameDt)) * 0.08;
-
-  if (!paused) {
-    accumulator += frameDt;
-    let steps = 0;
-    while (accumulator >= FIXED_DT && steps < 10) {
-      simTime += FIXED_DT;
-      water.update();
-      for (const o of objects) o.update(FIXED_DT, water);
-      accumulator -= FIXED_DT; steps++;
-    }
-    for (let i = particles.length - 1; i >= 0; i--) {
-      const p = particles[i];
-      p.update(frameDt);
-      if (p.x < water.tankLeft || p.x > water.tankRight || p.y > water.tankBottom + 40) p.life = 0;
-      if (p.type === 'bubble' && p.y < water.getSurfaceY(p.x)) p.life = 0;
-      if (p.life <= 0) particles.splice(i, 1);
-    }
-  }
-
-  ctx.clearRect(0, 0, W, H);
-  const bg = ctx.createRadialGradient(W/2, H/2, 0, W/2, H/2, W*0.8);
-  bg.addColorStop(0, '#151b35'); bg.addColorStop(1, '#0a0e27');
-  ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
-
-  drawTank();
-  drawWater();
-  for (const o of objects) o.draw(ctx, water);
-  for (const p of particles) p.draw(ctx);
-  for (const o of objects) o.drawLabel(ctx);
-  if (dragObj) drawTooltip(dragObj);
-
-  ctx.fillStyle = 'rgba(5,8,18,.8)';
-  const hud = `FPS: ${Math.round(fpsSmooth)} | Partículas: ${particles.length} | ${paused ? 'Pausado' : 'Rodando'}`;
-  ctx.font = '12px monospace';
-  const hw = ctx.measureText(hud).width + 20;
-  ctx.fillRect(W - hw - 14, H - 34, hw, 24);
-  ctx.fillStyle = '#9fd0ff'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
-  ctx.fillText(hud, W - hw - 4, H - 22);
-
-  if (paused) {
-    ctx.fillStyle = 'rgba(255,255,255,.5)';
-    ctx.font = 'bold 34px sans-serif'; ctx.textAlign = 'center';
-    ctx.fillText('⏸ PAUSADO', W/2, H*0.3);
-  }
-  requestAnimationFrame(loop);
-}
+let lastTime=performance.now(),accumulator=0,fpsSmooth=60;
+function loop(){ const now=performance.now();let frameDt=Math.min(0.05,(now-lastTime)/1000);lastTime=now;fpsSmooth=fpsSmooth*0.92+(1/Math.max(1e-4,frameDt))*0.08;
+  if(!paused){ accumulator+=frameDt;let steps=0;
+    while(accumulator>=FIXED_DT&&steps<10){simTime+=FIXED_DT;water.update();for(const o of objects)o.update(FIXED_DT,water);accumulator-=FIXED_DT;steps++;}
+    for(let i=particles.length-1;i>=0;i--){const p=particles[i];p.update(frameDt);
+      if(p.x<water.tankLeft||p.x>water.tankRight||p.y>water.tankBottom+40)p.life=0;
+      if(p.type==='bubble'&&p.y<water.getSurfaceY(p.x))p.life=0;if(p.life<=0)particles.splice(i,1);} }
+  ctx.clearRect(0,0,W,H);const bg=ctx.createRadialGradient(W/2,H/2,0,W/2,H/2,W*0.8);bg.addColorStop(0,'#151b35');bg.addColorStop(1,'#0a0e27');ctx.fillStyle=bg;ctx.fillRect(0,0,W,H);
+  drawTank();drawWater();for(const o of objects)o.draw(ctx,water);for(const p of particles)p.draw(ctx);for(const o of objects)o.drawLabel(ctx);
+  if(dragObj)drawTooltip(dragObj);
+  ctx.fillStyle='rgba(5,8,18,.8)';const hud=`FPS: ${Math.round(fpsSmooth)} | Partículas: ${particles.length} | ${paused?'Pausado':'Rodando'}`;ctx.font='12px monospace';const hw=ctx.measureText(hud).width+20;
+  ctx.fillRect(W-hw-14,H-34,hw,24);ctx.fillStyle='#9fd0ff';ctx.textAlign='left';ctx.textBaseline='middle';ctx.fillText(hud,W-hw-4,H-22);
+  if(paused){ctx.fillStyle='rgba(255,255,255,.5)';ctx.font='bold 34px sans-serif';ctx.textAlign='center';ctx.fillText('⏸ PAUSADO',W/2,H*0.3);}
+  requestAnimationFrame(loop); }
 loop();
 </script>
 </body>
