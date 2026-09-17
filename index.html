@@ -35,10 +35,12 @@ body {
     cursor: grabbing;
 }
 
-#controls {
+#canvas.hover-object {
+    cursor: pointer;
+}
+
+.panel {
     position: absolute;
-    top: 20px;
-    right: 20px;
     background: rgba(20, 30, 50, 0.95);
     padding: 20px;
     border-radius: 12px;
@@ -47,6 +49,48 @@ body {
     min-width: 280px;
     max-height: 90vh;
     overflow-y: auto;
+    transition: transform 0.3s ease;
+}
+
+.panel.collapsed {
+    transform: translateX(calc(100% + 30px));
+}
+
+.panel.left.collapsed {
+    transform: translateX(calc(-100% - 30px));
+}
+
+.panel-toggle {
+    position: absolute;
+    top: 50%;
+    right: -15px;
+    width: 30px;
+    height: 60px;
+    background: rgba(20, 30, 50, 0.95);
+    border: 1px solid #3a4a6b;
+    border-radius: 0 8px 8px 0;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    color: #7ab8ff;
+    transition: background 0.2s;
+}
+
+.panel.left .panel-toggle {
+    right: auto;
+    left: -15px;
+    border-radius: 8px 0 0 8px;
+}
+
+.panel-toggle:hover {
+    background: rgba(40, 50, 80, 0.95);
+}
+
+#controls {
+    top: 20px;
+    right: 20px;
 }
 
 #controls h2 {
@@ -96,10 +140,41 @@ body {
 }
 
 .control-value {
+    display: block;
+    text-align: right;
     font-size: 12px;
     color: #7ab8ff;
-    float: right;
-    margin-top: -20px;
+    margin-top: 3px;
+    font-weight: 600;
+}
+
+.preset-chips {
+    display: flex;
+    gap: 6px;
+    margin-top: 8px;
+    flex-wrap: wrap;
+}
+
+.chip {
+    padding: 4px 10px;
+    background: rgba(90, 158, 255, 0.15);
+    border: 1px solid rgba(90, 158, 255, 0.3);
+    border-radius: 12px;
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.2s;
+    color: #a0b0c0;
+}
+
+.chip:hover {
+    background: rgba(90, 158, 255, 0.3);
+    color: #fff;
+}
+
+.chip.active {
+    background: rgba(90, 158, 255, 0.5);
+    color: #fff;
+    border-color: #5a9eff;
 }
 
 button {
@@ -127,13 +202,8 @@ button:active {
 }
 
 #info {
-    position: absolute;
     bottom: 20px;
     left: 20px;
-    background: rgba(20, 30, 50, 0.95);
-    padding: 15px;
-    border-radius: 12px;
-    border: 1px solid #3a4a6b;
     font-size: 13px;
     line-height: 1.6;
     max-width: 280px;
@@ -171,6 +241,7 @@ button:active {
     font-weight: 700;
     color: #7ab8ff;
     text-shadow: 0 2px 10px rgba(122, 184, 255, 0.5);
+    pointer-events: none;
 }
 
 #title small {
@@ -179,6 +250,57 @@ button:active {
     color: #a0b0c0;
     font-weight: 400;
     margin-top: 5px;
+}
+
+#hud {
+    position: absolute;
+    bottom: 20px;
+    right: 20px;
+    background: rgba(0, 0, 0, 0.7);
+    padding: 8px 14px;
+    border-radius: 8px;
+    font-family: monospace;
+    font-size: 11px;
+    color: #7ab8ff;
+    pointer-events: none;
+}
+
+#tooltip {
+    position: absolute;
+    background: rgba(0, 0, 0, 0.85);
+    color: #fff;
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.2s;
+    max-width: 200px;
+    line-height: 1.4;
+}
+
+#tooltip.visible {
+    opacity: 1;
+}
+
+#pause-indicator {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(0, 0, 0, 0.8);
+    color: #fff;
+    padding: 20px 40px;
+    border-radius: 12px;
+    font-size: 24px;
+    font-weight: 700;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s;
+}
+
+#pause-indicator.visible {
+    opacity: 1;
 }
 </style>
 </head>
@@ -190,13 +312,18 @@ button:active {
 
 <canvas id="canvas"></canvas>
 
-<div id="controls">
+<div id="controls" class="panel">
     <h2>⚙️ Controles</h2>
     
     <div class="control-group">
         <label>Gravidade (m/s²)</label>
-        <input type="range" id="gravity" min="0" max="20" step="0.5" value="9.8">
+        <input type="range" id="gravity" min="0" max="30" step="0.1" value="9.8">
         <span class="control-value" id="gravityVal">9.8</span>
+        <div class="preset-chips">
+            <span class="chip" data-gravity="1.6">🌙 Lua</span>
+            <span class="chip active" data-gravity="9.8">🌍 Terra</span>
+            <span class="chip" data-gravity="24.8">🪐 Júpiter</span>
+        </div>
     </div>
     
     <div class="control-group">
@@ -214,9 +341,10 @@ button:active {
     <button id="resetBtn">🔄 Reiniciar Simulação</button>
     <button id="waveBtn">🌊 Criar Onda</button>
     <button id="dropBtn">⬇️ Derrubar Objetos</button>
+    <button id="pauseBtn">⏸️ Pausar (P)</button>
 </div>
 
-<div id="info">
+<div id="info" class="panel left">
     <div class="object-info chumbo">
         <strong>🟫 Bloco de Chumbo</strong><br>
         Densidade: 11.340 kg/m³<br>
@@ -234,9 +362,19 @@ button:active {
     </div>
     <div style="margin-top: 10px; font-size: 12px; color: #8090a0;">
         💡 Arraste os objetos para movê-los<br>
-        💡 Clique na água para criar ondas
+        💡 Clique na água para criar ondas<br>
+        💡 Pressione P para pausar
     </div>
 </div>
+
+<div id="hud">
+    <span id="fps">FPS: 60</span> | 
+    <span id="particleCount">Partículas: 0</span> | 
+    <span id="status">Rodando</span>
+</div>
+
+<div id="tooltip"></div>
+<div id="pause-indicator">⏸️ PAUSADO</div>
 
 <script>
 // ============================================
@@ -261,6 +399,7 @@ const SCALE = 0.005; // 1 pixel = 0.5 cm (5 mm)
 let gravity = 9.8;
 let waterViscosity = 0.5;
 let airDrag = 0.2;
+let paused = false;
 
 // Tempo fixo para física (ms)
 const FIXED_DT = 1/120;
@@ -319,9 +458,10 @@ class WaterSurface {
             }
         }
         
-        // Atualizar alturas
+        // Atualizar alturas com clamp para evitar vales extremos
         for (let i = 0; i < this.numColumns; i++) {
             this.heights[i] += this.velocities[i];
+            this.heights[i] = Math.max(-80, Math.min(80, this.heights[i]));
         }
     }
     
@@ -427,6 +567,59 @@ class Particle {
 }
 
 // ============================================
+// UTILITÁRIOS DE GEOMETRIA
+// ============================================
+
+// Clipar polígono contra linha horizontal (Sutherland-Hodgman simplificado)
+function clipPolygonAgainstLine(polygon, lineY) {
+    const clipped = [];
+    const n = polygon.length;
+    
+    for (let i = 0; i < n; i++) {
+        const curr = polygon[i];
+        const next = polygon[(i + 1) % n];
+        
+        const currBelow = curr.y >= lineY;
+        const nextBelow = next.y >= lineY;
+        
+        if (currBelow) {
+            clipped.push(curr);
+        }
+        
+        if ((currBelow && !nextBelow) || (!currBelow && nextBelow)) {
+            // Intersecção
+            const t = (lineY - curr.y) / (next.y - curr.y);
+            const ix = curr.x + t * (next.x - curr.x);
+            clipped.push({ x: ix, y: lineY });
+        }
+    }
+    
+    return clipped;
+}
+
+// Calcular área e centroide de polígono
+function polygonProperties(polygon) {
+    if (polygon.length < 3) return { area: 0, centroid: { x: 0, y: 0 } };
+    
+    let area = 0;
+    let cx = 0, cy = 0;
+    
+    for (let i = 0; i < polygon.length; i++) {
+        const j = (i + 1) % polygon.length;
+        const cross = polygon[i].x * polygon[j].y - polygon[j].x * polygon[i].y;
+        area += cross;
+        cx += (polygon[i].x + polygon[j].x) * cross;
+        cy += (polygon[i].y + polygon[j].y) * cross;
+    }
+    
+    area /= 2;
+    cx /= (6 * area);
+    cy /= (6 * area);
+    
+    return { area: Math.abs(area), centroid: { x: cx, y: cy } };
+}
+
+// ============================================
 // OBJETO RÍGIDO
 // ============================================
 class RigidBody {
@@ -438,6 +631,7 @@ class RigidBody {
         this.vy = 0;
         this.angle = 0;
         this.angularVel = 0;
+        this.time = 0; // Para flutter da pena
         
         // Propriedades por tipo (valores realistas)
         if (type === 'chumbo') {
@@ -482,61 +676,58 @@ class RigidBody {
         this.dragging = false;
         this.dragOffsetX = 0;
         this.dragOffsetY = 0;
+        
+        // Hover
+        this.hovered = false;
+    }
+    
+    getVertices() {
+        const cosA = Math.cos(this.angle);
+        const sinA = Math.sin(this.angle);
+        const hw = this.width / 2;
+        const hh = this.height / 2;
+        
+        return [
+            { x: this.x - hw * cosA + hh * sinA, y: this.y - hw * sinA - hh * cosA },
+            { x: this.x + hw * cosA + hh * sinA, y: this.y + hw * sinA - hh * cosA },
+            { x: this.x + hw * cosA - hh * sinA, y: this.y + hw * sinA + hh * cosA },
+            { x: this.x - hw * cosA - hh * sinA, y: this.y - hw * sinA + hh * cosA }
+        ];
     }
     
     update(dt, water) {
         if (this.dragging) return;
+        
+        this.time += dt;
         
         // Forças
         let fx = 0;
         let fy = this.mass * gravity * 50; // Escala da gravidade
         let torque = 0;
         
-        // Verificar submersão (usando amostras ao longo da largura)
-        const samples = 5;
-        let submergedArea = 0;
-        let totalPressure = 0;
-        let pressureCenterX = 0;
-        
         const cosA = Math.cos(this.angle);
         const sinA = Math.sin(this.angle);
         
-        // Amostragem em 5 pontos ao longo do fundo do objeto
-        for (let i = 0; i < samples; i++) {
-            const t = (i + 0.5) / samples;
-            const localX = (t - 0.5) * this.width;
-            const localY = this.height / 2;
-            
-            // Ponto no mundo
-            const wx = this.x + localX * cosA - localY * sinA;
-            const wy = this.y + localX * sinA + localY * cosA;
-            
-            const surfaceY = water.getSurfaceY(wx);
-            const subDepth = wy - surfaceY;
-            
-            if (subDepth > 0) {
-                const sliceWidth = this.width / samples;
-                submergedArea += sliceWidth * subDepth;
-                
-                // Pressão = rho * g * profundidade
-                const pressure = WATER_DENSITY * gravity * subDepth * sliceWidth * SCALE;
-                totalPressure += pressure;
-                pressureCenterX += pressure * localX;
-            }
-        }
+        // Usar clipping de polígono para calcular submersão com precisão
+        const vertices = this.getVertices();
+        const surfaceY = water.getSurfaceY(this.x);
+        const clipped = clipPolygonAgainstLine(vertices, surfaceY);
+        const props = polygonProperties(clipped);
         
-        const submergeRatio = submergedArea / this.area;
+        const submergeRatio = props.area / this.area;
         
         if (submergeRatio > 0.001) {
-            // Empuxo (força de Arquimedes)
-            const buoyancy = WATER_DENSITY * gravity * submergedArea * SCALE * SCALE * 0.1;
+            // Empuxo (força de Arquimedes) - usando área real submersa
+            const buoyancy = WATER_DENSITY * gravity * props.area * SCALE * SCALE * 0.1;
             fy -= buoyancy * 50;
             
-            // Torque do empuxo (centro de pressão)
-            if (totalPressure > 0) {
-                pressureCenterX /= totalPressure;
-                torque -= pressureCenterX * totalPressure * 0.1 * SCALE;
-            }
+            // Torque do empuxo (centro de empuxo)
+            const buoyancyCenterX = props.centroid.x - this.x;
+            const buoyancyCenterY = props.centroid.y - this.y;
+            
+            // Transformar para sistema local do objeto
+            const localBX = buoyancyCenterX * cosA + buoyancyCenterY * sinA;
+            torque -= localBX * buoyancy * 0.5 * SCALE;
             
             // Arrasto da água
             const speed = Math.sqrt(this.vx * this.vx + this.vy * this.vy);
@@ -573,11 +764,13 @@ class RigidBody {
                 }
             }
             
-            // Gerar bolhas quando afundando
+            // Gerar bolhas quando afundando (na borda superior do objeto)
             if (submergeRatio > 0.3 && this.vy > 20 && Math.random() < 0.4) {
+                const bubbleX = this.x + (Math.random() - 0.5) * this.width * 0.5;
+                const bubbleY = this.y - this.height * 0.4; // Borda superior
                 particles.push(new Particle(
-                    this.x + (Math.random() - 0.5) * this.width * 0.5,
-                    this.y + this.height * 0.3,
+                    bubbleX,
+                    bubbleY,
                     (Math.random() - 0.5) * 30,
                     -10 - Math.random() * 30,
                     'bubble'
@@ -596,10 +789,19 @@ class RigidBody {
                 fx -= dragMag * (this.vx / speed);
                 fy -= dragMag * (this.vy / speed);
                 
-                // A pena tende a se alinhar com o fluxo de ar (planar)
+                // Flutter da pena - oscilação natural
                 if (this.type === 'pena') {
-                    const liftForce = 0.5 * AIR_DENSITY * this.dragCoeff * this.width * SCALE * speed * 2;
-                    torque -= Math.sin(this.angle) * liftForce * 2;
+                    // Oscilação angular
+                    const flutter = Math.sin(this.time * 8) * 0.3;
+                    this.angularVel += flutter * dt;
+                    
+                    // Drift lateral
+                    const drift = Math.sin(this.time * 3) * 50;
+                    fx += drift;
+                    
+                    // Sustentação leve
+                    const liftForce = 0.5 * AIR_DENSITY * this.dragCoeff * this.width * SCALE * speed * 1.5;
+                    fy -= liftForce * 0.3;
                 }
             }
             
@@ -662,6 +864,34 @@ class RigidBody {
     draw(ctx, water) {
         const waterY = water.getSurfaceY(this.x);
         const submergeRatio = this.prevSubmerged;
+        
+        // Efeito de hover
+        if (this.hovered && !this.dragging) {
+            ctx.save();
+            ctx.strokeStyle = 'rgba(255, 255, 100, 0.8)';
+            ctx.lineWidth = 3;
+            ctx.translate(this.x, this.y);
+            ctx.rotate(this.angle);
+            ctx.strokeRect(-this.width/2 - 4, -this.height/2 - 4, this.width + 8, this.height + 8);
+            ctx.restore();
+        }
+        
+        // Reflexo na superfície (se parcialmente submerso)
+        if (submergeRatio > 0.05 && submergeRatio < 0.95) {
+            ctx.save();
+            ctx.globalAlpha = 0.12;
+            ctx.translate(this.x, waterY * 2 - this.y);
+            ctx.rotate(-this.angle);
+            ctx.scale(1, -1);
+            
+            const grad = ctx.createLinearGradient(-this.width/2, -this.height/2, this.width/2, this.height/2);
+            grad.addColorStop(0, this.color);
+            grad.addColorStop(1, this.colorDark);
+            ctx.fillStyle = grad;
+            ctx.fillRect(-this.width/2, -this.height/2, this.width, this.height);
+            
+            ctx.restore();
+        }
         
         ctx.save();
         ctx.translate(this.x, this.y);
@@ -738,30 +968,81 @@ class RigidBody {
         
         ctx.restore();
         
-        // Efeito de distorção quando submerso
-        if (submergeRatio > 0.1) {
-            ctx.save();
-            ctx.globalAlpha = 0.2;
-            ctx.fillStyle = 'rgba(100, 180, 255, 0.3)';
-            ctx.fillRect(this.x - this.width/2, waterY, this.width, this.y + this.height/2 - waterY);
-            ctx.restore();
-        }
-        
-        // Rótulo
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+        // Rótulo com fundo (sempre visível)
+        const labelY = this.y - this.height/2 - 15;
+        const labelText = this.emoji + ' ' + this.label;
         ctx.font = 'bold 13px sans-serif';
+        const textWidth = ctx.measureText(labelText).width;
+        
+        // Fundo do rótulo
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+        const padding = 6;
+        ctx.beginPath();
+        ctx.roundRect(this.x - textWidth/2 - padding, labelY - 14, textWidth + padding * 2, 20, 4);
+        ctx.fill();
+        
+        // Texto do rótulo
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
         ctx.textAlign = 'center';
-        ctx.textBaseline = 'bottom';
-        ctx.shadowColor = 'rgba(0, 0, 0, 0.8)';
-        ctx.shadowBlur = 4;
-        ctx.fillText(this.emoji + ' ' + this.label, this.x, this.y - this.height/2 - 8);
-        ctx.shadowBlur = 0;
+        ctx.textBaseline = 'middle';
+        ctx.fillText(labelText, this.x, labelY - 4);
     }
     
     contains(px, py) {
         // Aproximação: bounding box sem rotação
         return px >= this.x - this.width/2 - 5 && px <= this.x + this.width/2 + 5 &&
                py >= this.y - this.height/2 - 5 && py <= this.y + this.height/2 + 5;
+    }
+}
+
+// ============================================
+// COLISÃO OBJETO-OBJETO
+// ============================================
+function resolveCollisions() {
+    for (let i = 0; i < objects.length; i++) {
+        for (let j = i + 1; j < objects.length; j++) {
+            const a = objects[i];
+            const b = objects[j];
+            
+            // Distância entre centros
+            const dx = b.x - a.x;
+            const dy = b.y - a.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            
+            // Distância mínima (soma dos raios das bounding boxes)
+            const minDist = (a.width + b.width) / 2 * 0.7; // Fator de tolerância
+            
+            if (dist < minDist && dist > 0) {
+                // Separar objetos
+                const overlap = minDist - dist;
+                const nx = dx / dist;
+                const ny = dy / dist;
+                
+                const totalMass = a.mass + b.mass;
+                const aRatio = b.mass / totalMass;
+                const bRatio = a.mass / totalMass;
+                
+                a.x -= nx * overlap * aRatio * 0.5;
+                a.y -= ny * overlap * aRatio * 0.5;
+                b.x += nx * overlap * bRatio * 0.5;
+                b.y += ny * overlap * bRatio * 0.5;
+                
+                // Trocar velocidades (simplificado)
+                const relVx = b.vx - a.vx;
+                const relVy = b.vy - a.vy;
+                const relDot = relVx * nx + relVy * ny;
+                
+                if (relDot < 0) {
+                    const restitution = 0.3;
+                    const impulse = (1 + restitution) * relDot / (1/a.mass + 1/b.mass);
+                    
+                    a.vx += impulse * nx / a.mass;
+                    a.vy += impulse * ny / a.mass;
+                    b.vx -= impulse * nx / b.mass;
+                    b.vy -= impulse * ny / b.mass;
+                }
+            }
+        }
     }
 }
 
@@ -775,9 +1056,10 @@ function resetSimulation() {
     objects.length = 0;
     particles.length = 0;
     
-    objects.push(new RigidBody('chumbo', W * 0.25, H * 0.12));
-    objects.push(new RigidBody('plastico', W * 0.5, H * 0.12));
-    objects.push(new RigidBody('pena', W * 0.75, H * 0.12));
+    // Spawn em posições visíveis (longe dos painéis)
+    objects.push(new RigidBody('chumbo', W * 0.25, H * 0.20));
+    objects.push(new RigidBody('plastico', W * 0.5, H * 0.20));
+    objects.push(new RigidBody('pena', W * 0.40, H * 0.10)); // Pena no topo, não atrás do painel
     
     for (let i = 0; i < water.numColumns; i++) {
         water.heights[i] = 0;
@@ -804,14 +1086,14 @@ function drawTank() {
     // Textura de fundo (caustics)
     causticTime += 0.01;
     ctx.save();
-    ctx.globalAlpha = 0.12;
+    ctx.globalAlpha = 0.15;
     ctx.fillStyle = 'rgba(150, 220, 255, 0.8)';
-    for (let i = 0; i < 12; i++) {
+    for (let i = 0; i < 15; i++) {
         const phase = causticTime * 2 + i * 1.3;
-        const x = water.tankLeft + (i / 12) * (water.tankRight - water.tankLeft) + 
-                  Math.sin(phase) * 20;
-        const y = water.tankBottom + 10 + Math.cos(phase * 0.7) * 8;
-        const size = 30 + Math.sin(phase * 1.5) * 15;
+        const x = water.tankLeft + (i / 15) * (water.tankRight - water.tankLeft) + 
+                  Math.sin(phase) * 25;
+        const y = water.tankBottom + 10 + Math.cos(phase * 0.7) * 10;
+        const size = 35 + Math.sin(phase * 1.5) * 20;
         
         ctx.beginPath();
         ctx.ellipse(x, y, size, size * 0.4, Math.sin(phase * 0.3) * 0.5, 0, Math.PI * 2);
@@ -852,6 +1134,26 @@ function drawTank() {
     ctx.moveTo(water.tankRight - 2, 0);
     ctx.lineTo(water.tankRight - 2, H);
     ctx.stroke();
+    
+    // Menisco nas paredes
+    ctx.save();
+    ctx.strokeStyle = 'rgba(200, 240, 255, 0.4)';
+    ctx.lineWidth = 2;
+    
+    // Menisco esquerdo
+    ctx.beginPath();
+    ctx.moveTo(water.tankLeft, water.restY + water.heights[0]);
+    ctx.quadraticCurveTo(water.tankLeft + 8, water.restY + water.heights[0] - 3, water.tankLeft + 15, water.restY + water.heights[0]);
+    ctx.stroke();
+    
+    // Menisco direito
+    const lastIdx = water.numColumns - 1;
+    ctx.beginPath();
+    ctx.moveTo(water.tankRight, water.restY + water.heights[lastIdx]);
+    ctx.quadraticCurveTo(water.tankRight - 8, water.restY + water.heights[lastIdx] - 3, water.tankRight - 15, water.restY + water.heights[lastIdx]);
+    ctx.stroke();
+    
+    ctx.restore();
 }
 
 function drawWater() {
@@ -917,6 +1219,23 @@ function drawWater() {
     
     ctx.restore();
     
+    // Espuma/whitecaps nas cristas
+    ctx.save();
+    for (let i = 0; i < water.numColumns; i++) {
+        const waveHeight = Math.abs(water.velocities[i]);
+        const x = water.tankLeft + i * water.columnWidth;
+        const y = water.restY + water.heights[i];
+        
+        if (waveHeight > 1.5) {
+            ctx.globalAlpha = Math.min(0.8, waveHeight * 0.3);
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+            ctx.beginPath();
+            ctx.ellipse(x, y - 2, 4 + waveHeight * 0.5, 2, 0, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    }
+    ctx.restore();
+    
     // Reflexos/brilhos na superfície
     ctx.save();
     ctx.globalAlpha = 0.4;
@@ -944,41 +1263,59 @@ function drawParticles() {
 // ============================================
 // LOOP PRINCIPAL
 // ============================================
+let fpsCounter = 0;
+let fpsTime = 0;
+let currentFps = 60;
+
 function update() {
     const now = performance.now();
     let frameDt = (now - lastTime) / 1000;
     lastTime = now;
     frameDt = Math.min(frameDt, 0.05);
     
-    accumulator += frameDt;
-    
-    // Física com passo fixo (mais estável)
-    let physicsSteps = 0;
-    while (accumulator >= FIXED_DT && physicsSteps < 8) {
-        water.update();
-        for (const obj of objects) {
-            obj.update(FIXED_DT, water);
-        }
-        accumulator -= FIXED_DT;
-        physicsSteps++;
+    // Calcular FPS
+    fpsCounter++;
+    fpsTime += frameDt;
+    if (fpsTime >= 0.5) {
+        currentFps = Math.round(fpsCounter / fpsTime);
+        fpsCounter = 0;
+        fpsTime = 0;
     }
     
-    // Atualizar partículas (tempo variável ok)
-    for (let i = particles.length - 1; i >= 0; i--) {
-        particles[i].update(frameDt);
-        const p = particles[i];
+    if (!paused) {
+        accumulator += frameDt;
         
-        // Checar se partícula saiu do tanque
-        if (p.x < water.tankLeft || p.x > water.tankRight || p.y > water.tankBottom + 50) {
-            p.life = 0;
+        // Física com passo fixo (mais estável)
+        let physicsSteps = 0;
+        while (accumulator >= FIXED_DT && physicsSteps < 8) {
+            water.update();
+            for (const obj of objects) {
+                obj.update(FIXED_DT, water);
+            }
+            resolveCollisions();
+            accumulator -= FIXED_DT;
+            physicsSteps++;
         }
-        // Bolha explode ao chegar na superfície
-        if (p.type === 'bubble' && p.y < water.getSurfaceY(p.x)) {
-            p.life = 0;
-        }
-        
-        if (p.life <= 0) {
-            particles.splice(i, 1);
+    }
+    
+    // Atualizar partículas (tempo variável ok, mas respeitar pausa)
+    if (!paused) {
+        for (let i = particles.length - 1; i >= 0; i--) {
+            particles[i].update(frameDt);
+            const p = particles[i];
+            
+            // Checar se partícula saiu do tanque
+            if (p.x < water.tankLeft || p.x > water.tankRight || p.y > water.tankBottom + 50) {
+                p.life = 0;
+            }
+            // Bolha explode ao chegar na superfície
+            if (p.type === 'bubble' && p.y < water.getSurfaceY(p.x)) {
+                p.life = 0;
+            }
+            
+            if (p.life <= 0) {
+                particles.splice(i, 1);
+            }
         }
     }
     
@@ -996,30 +1333,23 @@ function update() {
     
     drawTank();
     
-    // Desenhar objetos submersos primeiro
+    // Desenhar objetos submersos (apenas a parte visível acima da água)
+    // A água é desenhada por cima, criando efeito de submersão natural
     for (const obj of objects) {
-        if (obj.prevSubmerged > 0.1) {
-            obj.draw(ctx, water);
-        }
+        obj.draw(ctx, water);
     }
     
     drawWater();
     
-    // Objetos acima da água
-    for (const obj of objects) {
-        if (obj.prevSubmerged <= 0.1) {
-            obj.draw(ctx, water);
-        }
-    }
+    // Desenhar labels por cima de tudo (após água)
+    // Labels já são desenhados no obj.draw()
     
     drawParticles();
     
-    // HUD de status
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
-    ctx.font = '11px monospace';
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'top';
-    ctx.fillText(`FPS: ${(1/frameDt).toFixed(0)} | Partículas: ${particles.length}`, 10, H - 20);
+    // Atualizar HUD
+    document.getElementById('fps').textContent = `FPS: ${currentFps}`;
+    document.getElementById('particleCount').textContent = `Partículas: ${particles.length}`;
+    document.getElementById('status').textContent = paused ? 'Pausado' : 'Rodando';
     
     requestAnimationFrame(update);
 }
@@ -1030,6 +1360,7 @@ update();
 // INTERAÇÃO COM MOUSE
 // ============================================
 let draggedObject = null;
+const tooltip = document.getElementById('tooltip');
 
 function getMousePos(e) {
     const rect = canvas.getBoundingClientRect();
@@ -1039,7 +1370,28 @@ function getMousePos(e) {
     };
 }
 
+function updateTooltip(obj, pos) {
+    if (obj && obj.dragging) {
+        const weight = obj.mass * gravity;
+        const buoyancy = WATER_DENSITY * gravity * obj.prevSubmerged * obj.area * SCALE * SCALE * 0.1;
+        
+        tooltip.innerHTML = `
+            <strong>${obj.emoji} ${obj.label}</strong><br>
+            Peso: ${weight.toFixed(3)} N<br>
+            Empuxo: ${buoyancy.toFixed(3)} N<br>
+            Submersão: ${(obj.prevSubmerged * 100).toFixed(0)}%
+        `;
+        tooltip.style.left = (pos.x + 20) + 'px';
+        tooltip.style.top = (pos.y - 20) + 'px';
+        tooltip.classList.add('visible');
+    } else {
+        tooltip.classList.remove('visible');
+    }
+}
+
 canvas.addEventListener('mousedown', (e) => {
+    if (paused) return;
+    
     const pos = getMousePos(e);
     
     for (const obj of objects) {
@@ -1050,6 +1402,7 @@ canvas.addEventListener('mousedown', (e) => {
             obj.dragOffsetY = obj.y - pos.y;
             obj.vx = 0;
             obj.vy = 0;
+            updateTooltip(obj, pos);
             return;
         }
     }
@@ -1076,6 +1429,14 @@ canvas.addEventListener('mousedown', (e) => {
 canvas.addEventListener('mousemove', (e) => {
     const pos = getMousePos(e);
     
+    // Hover detection
+    let hovering = false;
+    for (const obj of objects) {
+        obj.hovered = obj.contains(pos.x, pos.y);
+        if (obj.hovered) hovering = true;
+    }
+    canvas.classList.toggle('hover-object', hovering);
+    
     if (draggedObject) {
         const targetX = pos.x + draggedObject.dragOffsetX;
         const targetY = pos.y + draggedObject.dragOffsetY;
@@ -1086,6 +1447,8 @@ canvas.addEventListener('mousemove', (e) => {
         
         draggedObject.x = targetX;
         draggedObject.y = targetY;
+        
+        updateTooltip(draggedObject, pos);
     }
 });
 
@@ -1093,6 +1456,7 @@ canvas.addEventListener('mouseup', () => {
     if (draggedObject) {
         draggedObject.dragging = false;
         draggedObject = null;
+        tooltip.classList.remove('visible');
     }
 });
 
@@ -1100,7 +1464,14 @@ canvas.addEventListener('mouseleave', () => {
     if (draggedObject) {
         draggedObject.dragging = false;
         draggedObject = null;
+        tooltip.classList.remove('visible');
     }
+    
+    // Limpar hover
+    for (const obj of objects) {
+        obj.hovered = false;
+    }
+    canvas.classList.remove('hover-object');
 });
 
 // Touch support
@@ -1130,21 +1501,46 @@ canvas.addEventListener('touchend', (e) => {
 // ============================================
 // CONTROLES
 // ============================================
-document.getElementById('gravity').addEventListener('input', (e) => {
+const gravitySlider = document.getElementById('gravity');
+const gravityVal = document.getElementById('gravityVal');
+const viscositySlider = document.getElementById('viscosity');
+const viscosityVal = document.getElementById('viscosityVal');
+const airDragSlider = document.getElementById('airDrag');
+const airDragVal = document.getElementById('airDragVal');
+
+gravitySlider.addEventListener('input', (e) => {
     gravity = parseFloat(e.target.value);
-    document.getElementById('gravityVal').textContent = gravity.toFixed(1);
+    gravityVal.textContent = gravity.toFixed(1);
+    
+    // Atualizar chip ativo
+    document.querySelectorAll('.chip').forEach(chip => {
+        const chipGravity = parseFloat(chip.dataset.gravity);
+        chip.classList.toggle('active', Math.abs(chipGravity - gravity) < 0.05);
+    });
 });
 
-document.getElementById('viscosity').addEventListener('input', (e) => {
+document.querySelectorAll('.chip').forEach(chip => {
+    chip.addEventListener('click', () => {
+        const g = parseFloat(chip.dataset.gravity);
+        gravity = g;
+        gravitySlider.value = g;
+        gravityVal.textContent = g.toFixed(1);
+        
+        document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+        chip.classList.add('active');
+    });
+});
+
+viscositySlider.addEventListener('input', (e) => {
     waterViscosity = parseFloat(e.target.value) / 100;
-    document.getElementById('viscosityVal').textContent = e.target.value + '%';
+    viscosityVal.textContent = e.target.value + '%';
     water.damping = 0.005 + waterViscosity * 0.04;
     water.spread = 0.2 + (1 - waterViscosity) * 0.2;
 });
 
-document.getElementById('airDrag').addEventListener('input', (e) => {
+airDragSlider.addEventListener('input', (e) => {
     airDrag = parseFloat(e.target.value) / 100;
-    document.getElementById('airDragVal').textContent = e.target.value + '%';
+    airDragVal.textContent = e.target.value + '%';
     for (const obj of objects) {
         if (obj.type === 'pena') {
             obj.dragCoeff = 15 + airDrag * 30;
@@ -1178,6 +1574,32 @@ document.getElementById('dropBtn').addEventListener('click', () => {
         obj.vy = 0;
         obj.vx = (Math.random() - 0.5) * 50;
     }
+});
+
+document.getElementById('pauseBtn').addEventListener('click', () => {
+    paused = !paused;
+    document.getElementById('pauseBtn').textContent = paused ? '▶️ Retomar (P)' : '⏸️ Pausar (P)';
+    document.getElementById('pause-indicator').classList.toggle('visible', paused);
+});
+
+// Tecla P para pausar
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'p' || e.key === 'P') {
+        document.getElementById('pauseBtn').click();
+    }
+});
+
+// Painéis colapsáveis
+document.querySelectorAll('.panel').forEach(panel => {
+    const toggle = document.createElement('div');
+    toggle.className = 'panel-toggle';
+    toggle.textContent = '◀';
+    panel.appendChild(toggle);
+    
+    toggle.addEventListener('click', () => {
+        panel.classList.toggle('collapsed');
+        toggle.textContent = panel.classList.contains('collapsed') ? '▶' : '◀';
+    });
 });
 
 // Ajustar canvas à janela
