@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🎵 Music Downloader</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+    color: #eee;
+    min-height: 100vh;
+    padding: 30px 20px;
+  }
+  .container {
+    max-width: 900px;
+    margin: 0 auto;
+  }
+  h1 {
+    text-align: center;
+    font-size: 2.5em;
+    margin-bottom: 10px;
+    background: linear-gradient(90deg, #a78bfa, #60a5fa, #34d399);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .subtitle {
+    text-align: center;
+    color: #94a3b8;
+    margin-bottom: 30px;
+  }
+  .card {
+    background: rgba(30, 41, 59, 0.7);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    border-radius: 16px;
+    padding: 25px;
+    margin-bottom: 20px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+  }
+  label {
+    display: block;
+    font-weight: 600;
+    margin-bottom: 8px;
+    color: #cbd5e1;
+    font-size: 0.95em;
+  }
+  input, select {
+    width: 100%;
+    padding: 12px 16px;
+    border-radius: 10px;
+    border: 1px solid rgba(148, 163, 184, 0.3);
+    background: rgba(15, 23, 42, 0.8);
+    color: #eee;
+    font-size: 1em;
+    outline: none;
+    transition: all 0.2s;
+  }
+  input:focus, select:focus {
+    border-color: #60a5fa;
+    box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.15);
+  }
+  .row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 15px;
+    margin-top: 15px;
+  }
+  .btn {
+    padding: 12px 22px;
+    border: none;
+    border-radius: 10px;
+    font-size: 1em;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    color: white;
+  }
+  .btn-primary {
+    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+    width: 100%;
+    margin-top: 15px;
+  }
+  .btn-primary:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(99, 102, 241, 0.4);
+  }
+  .btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  .btn-small {
+    padding: 6px 12px;
+    font-size: 0.85em;
+    background: #475569;
+  }
+  .progress-bar {
+    width: 100%;
+    height: 10px;
+    background: rgba(15, 23, 42, 0.8);
+    border-radius: 5px;
+    overflow: hidden;
+    margin-top: 15px;
+  }
+  .progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #34d399, #60a5fa, #a78bfa);
+    width: 0%;
+    transition: width 0.4s ease;
+    border-radius: 5px;
+  }
+  .status {
+    margin-top: 12px;
+    font-size: 0.9em;
+    color: #94a3b8;
+    display: flex;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .info-box {
+    margin-top: 15px;
+    padding: 15px;
+    background: rgba(15, 23, 42, 0.6);
+    border-radius: 10px;
+    border-left: 4px solid #60a5fa;
+    display: none;
+  }
+  .info-box.active { display: block; }
+  .info-box h3 {
+    margin-bottom: 8px;
+    color: #60a5fa;
+    font-size: 1em;
+  }
+  .info-box p {
+    font-size: 0.9em;
+    color: #cbd5e1;
+    margin: 4px 0;
+  }
+  .playlist-item {
+    padding: 8px 12px;
+    margin: 4px 0;
+    background: rgba(51, 65, 85, 0.5);
+    border-radius: 6px;
+    font-size: 0.85em;
+    display: flex;
+    justify-content: space-between;
+  }
+  .playlist-item:hover { background: rgba(71, 85, 105, 0.7); }
+  .files-list {
+    margin-top: 10px;
+  }
+  .file-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 14px;
+    background: rgba(51, 65, 85, 0.4);
+    border-radius: 8px;
+    margin-bottom: 8px;
+    font-size: 0.9em;
+  }
+  .file-item a {
+    color: #34d399;
+    text-decoration: none;
+    font-weight: 600;
+    padding: 5px 12px;
+    border-radius: 6px;
+    background: rgba(52, 211, 153, 0.1);
+    transition: all 0.2s;
+  }
+  .file-item a:hover {
+    background: rgba(52, 211, 153, 0.2);
+  }
+  .badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 0.75em;
+    font-weight: 600;
+    text-transform: uppercase;
+  }
+  .badge-downloading { background: #3b82f6; }
+  .badge-done { background: #10b981; }
+  .badge-error { background: #ef4444; }
+  .badge-processing { background: #f59e0b; }
+  .spinner {
+    display: inline-block;
+    width: 12px; height: 12px;
+    border: 2px solid rgba(255,255,255,0.3);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin-right: 6px;
+    vertical-align: middle;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .section-title {
+    font-size: 1.1em;
+    margin-bottom: 15px;
+    color: #a78bfa;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>🎵 Music Downloader</h1>
+  <p class="subtitle">Baixe músicas e vídeos com yt-dlp — rápido e simples</p>
+
+  <!-- PAINEL DE DOWNLOAD -->
+  <div class="card">
+    <div class="section-title">⬇️ Novo Download</div>
+
+    <label for="url">URL do vídeo ou playlist (YouTube, SoundCloud, etc.)</label>
+    <input type="text" id="url" placeholder="https://www.youtube.com/watch?v=..." />
+
+    <div class="row">
+      <div>
+        <label for="mode">Tipo</label>
+        <select id="mode">
+          <option value="audio">🎵 Áudio (MP3)</option>
+          <option value="video">🎬 Vídeo (MP4)</option>
+        </select>
+      </div>
+      <div>
+        <label for="quality">Qualidade</label>
+        <select id="quality">
+          <option value="192">MP3 192 kbps</option>
+          <option value="320">MP3 320 kbps</option>
+          <option value="128">MP3 128 kbps</option>
+          <option value="1080">Vídeo 1080p</option>
+          <option value="720">Vídeo 720p</option>
+          <option value="480">Vídeo 480p</option>
+          <option value="best">Melhor disponível</option>
+        </select>
+      </div>
+    </div>
+
+    <button class="btn btn-primary" id="btnInfo" style="margin-bottom:10px;">
+      🔍 Ver Informações
+    </button>
+    <button class="btn btn-primary" id="btnDownload">
+      ⬇️ Iniciar Download
+    </button>
+
+    <!-- Preview de informações -->
+    <div class="info-box" id="infoBox"></div>
+
+    <!-- Progresso -->
+    <div class="progress-bar" id="progressBar" style="display:none;">
+      <div class="progress-fill" id="progressFill"></div>
+    </div>
+    <div class="status" id="status" style="display:none;"></div>
+  </div>
+
+  <!-- ARQUIVOS BAIXADOS -->
+  <div class="card">
+    <div class="section-title" style="justify-content:space-between;">
+      <span>📁 Arquivos Baixados</span>
+      <button class="btn btn-small" onclick="loadFiles()">🔄 Atualizar</button>
+    </div>
+    <div class="files-list" id="filesList">
+      <p style="color:#64748b;font-size:0.9em;">Nenhum arquivo ainda...</p>
+    </div>
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+let pollInterval = null;
+
+// Alterna opções de qualidade conforme o tipo
+$('mode').addEventListener('change', () => {
+  const mode = $('mode').value;
+  const q = $('quality');
+  q.innerHTML = '';
+  const opts = mode === 'audio'
+    ? [['192','MP3 192 kbps'], ['320','MP3 320 kbps'], ['128','MP3 128 kbps']]
+    : [['best','Melhor disponível'], ['1080','1080p'], ['720','720p'], ['480','480p'], ['360','360p']];
+  opts.forEach(([v,t]) => {
+    const o = document.createElement('option');
+    o.value = v; o.textContent = t;
+    q.appendChild(o);
+  });
+});
+
+// ============ BUSCAR INFO ============
+$('btnInfo').onclick = async () => {
+  const url = $('url').value.trim();
+  if (!url) return alert('Cole uma URL primeiro!');
+
+  const box = $('infoBox');
+  box.classList.add('active');
+  box.innerHTML = '<p><span class="spinner"></span>Buscando informações...</p>';
+  $('btnInfo').disabled = true;
+
+  try {
+    const res = await fetch('/api/info', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({url})
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+
+    if (data.type === 'playlist') {
+      box.innerHTML = `
+        <h3>📚 Playlist: ${escapeHtml(data.title)}</h3>
+        <p>${data.count} faixas encontradas</p>
+        <div style="max-height:200px;overflow-y:auto;margin-top:10px;">
+          ${data.tracks.map(t => `
+            <div class="playlist-item">
+              <span>${escapeHtml(t.title || '—')}</span>
+              <span style="color:#94a3b8;">${t.duration ? formatTime(t.duration) : ''}</span>
+            </div>`).join('')}
+        </div>`;
+    } else {
+      box.innerHTML = `
+        <h3>🎬 ${escapeHtml(data.title)}</h3>
+        <p><strong>Canal:</strong> ${escapeHtml(data.uploader || '—')}</p>
+        <p><strong>Duração:</strong> ${data.duration}</p>
+        ${data.view_count ? `<p><strong>Views:</strong> ${data.view_count.toLocaleString()}</p>` : ''}
+        ${data.thumbnail ? `<img src="${data.thumbnail}" style="max-width:180px;border-radius:8px;margin-top:10px;">` : ''}
+      `;
+    }
+  } catch (e) {
+    box.innerHTML = `<p style="color:#f87171;">❌ ${escapeHtml(e.message)}</p>`;
+  } finally {
+    $('btnInfo').disabled = false;
+  }
+};
+
+// ============ DOWNLOAD ============
+$('btnDownload').onclick = async () => {
+  const url = $('url').value.trim();
+  if (!url) return alert('Cole uma URL primeiro!');
+
+  const mode = $('mode').value;
+  const quality = $('quality').value;
+
+  $('progressBar').style.display = 'block';
+  $('status').style.display = 'flex';
+  $('progressFill').style.width = '0%';
+  $('status').innerHTML = '<span><span class="spinner"></span>Iniciando...</span>';
+  $('btnDownload').disabled = true;
+
+  try {
+    const res = await fetch('/api/download', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({url, mode, quality})
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+
+    // Começa polling
+    if (pollInterval) clearInterval(pollInterval);
+    pollInterval = setInterval(() => pollProgress(data.task_id), 800);
+  } catch (e) {
+    $('status').innerHTML = `<span style="color:#f87171;">❌ ${escapeHtml(e.message)}</span>`;
+    $('btnDownload').disabled = false;
+  }
+};
+
+async function pollProgress(taskId) {
+  try {
+    const res = await fetch(`/api/progress/${taskId}`);
+    const t = await res.json();
+    if (t.error) return;
+
+    const pct = t.percent || 0;
+    $('progressFill').style.width = pct + '%';
+
+    const badge = statusBadge(t.status);
+    const parts = [`${badge} <span>${pct.toFixed(1)}%</span>`];
+    if (t.speed) parts.push(`<span>⚡ ${t.speed}</span>`);
+    if (t.eta) parts.push(`<span>⏱ ${t.eta}</span>`);
+    if (t.downloaded && t.total) parts.push(`<span>${t.downloaded} / ${t.total}</span>`);
+    $('status').innerHTML = parts.join('');
+
+    if (t.message) {
+      $('status').innerHTML += `<span style="width:100%;color:#94a3b8;font-size:0.85em;">${escapeHtml(t.message)}</span>`;
+    }
+
+    if (t.status === 'done' || t.status === 'error') {
+      clearInterval(pollInterval);
+      $('btnDownload').disabled = false;
+      loadFiles();
+    }
+  } catch (e) { /* ignora */ }
+}
+
+function statusBadge(s) {
+  const map = {
+    queued: ['Aguardando', 'badge-downloading'],
+    starting: ['Iniciando', 'badge-downloading'],
+    downloading: ['Baixando', 'badge-downloading'],
+    processing: ['Processando', 'badge-processing'],
+    done: ['Concluído', 'badge-done'],
+    error: ['Erro', 'badge-error'],
+  };
+  const [label, cls] = map[s] || [s, 'badge-downloading'];
+  return `<span class="badge ${cls}">${label}</span>`;
+}
+
+// ============ LISTAR ARQUIVOS ============
+async function loadFiles() {
+  try {
+    const res = await fetch('/api/files');
+    const files = await res.json();
+    const list = $('filesList');
+    if (!files.length) {
+      list.innerHTML = '<p style="color:#64748b;font-size:0.9em;">Nenhum arquivo ainda...</p>';
+      return;
+    }
+    list.innerHTML = files.map(f => `
+      <div class="file-item">
+        <div>
+          <div>${escapeHtml(f.name)}</div>
+          <div style="color:#64748b;font-size:0.8em;margin-top:2px;">${f.size}</div>
+        </div>
+        <a href="/api/file/${encodeURIComponent(f.name)}" download>⬇ Baixar</a>
+      </div>
+    `).join('');
+  } catch (e) {
+    console.error(e);
+  }
+}
+
+// ============ HELPERS ============
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({
+    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+  }[c]));
+}
+function formatTime(sec) {
+  sec = Math.floor(sec);
+  const m = Math.floor(sec/60), s = sec % 60;
+  return `${m}:${s.toString().padStart(2,'0')}`;
+}
+
+// Carrega arquivos ao abrir
+loadFiles();
+setInterval(loadFiles, 10000);
+</script>
+</body>
+</html>
