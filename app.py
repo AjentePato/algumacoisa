@@ -5,14 +5,13 @@ from supabase import create_client, Client
 
 app = Flask(__name__)
 
-# Configurações do Supabase via Variáveis de Ambiente
+# Credenciais lidas das variáveis de ambiente do Render
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 BUCKET_NAME = "midias"
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-# Extensões suportadas
 VIDEO_EXTENSIONS = ('.mp4', '.webm', '.ogg', '.mov')
 IMAGE_EXTENSIONS = ('.jpg', '.jpeg', '.png', '.gif', '.webp')
 
@@ -20,19 +19,16 @@ IMAGE_EXTENSIONS = ('.jpg', '.jpeg', '.png', '.gif', '.webp')
 def index():
     itens = []
     try:
-        # Lista os arquivos dentro do bucket
+        # Busca lista de arquivos salvos no bucket
         arquivos = supabase.storage.from_(BUCKET_NAME).list()
         
         for arq in arquivos:
-            nome = arq['name']
-            # Ignora pastas ou arquivos ocultos que o supabase às vezes cria
-            if nome == '.emptyFolderPlaceholder':
+            nome = arq.get('name')
+            # Ignora pastas ou marcadores vazios do Supabase
+            if not nome or nome == '.emptyFolderPlaceholder':
                 continue
                 
-            # Gera o link direto do arquivo
             url = supabase.storage.from_(BUCKET_NAME).get_public_url(nome)
-            
-            # Identifica se é vídeo ou imagem pela extensão
             is_video = nome.lower().endswith(VIDEO_EXTENSIONS)
             
             itens.append({
@@ -49,17 +45,27 @@ def index():
 def upload():
     arquivo = request.files.get('file')
     if arquivo and arquivo.filename != '':
-        # Adiciona um timestamp na frente do nome para evitar arquivos duplicados
+        # Evita conflito de nomes usando timestamp
         nome_limpo = f"{int(time.time())}_{arquivo.filename}"
         conteudo = arquivo.read()
         content_type = arquivo.content_type
 
-        # Envia para o Supabase Storage
         supabase.storage.from_(BUCKET_NAME).upload(
             path=nome_limpo,
             file=conteudo,
             file_options={"content-type": content_type}
         )
+
+    return redirect(url_for('index'))
+
+@app.route('/deletar/<path:nome_arquivo>', methods=['POST'])
+def deletar(nome_arquivo):
+    try:
+        # Apaga o arquivo permanente da nuvem no Supabase
+        supabase.storage.from_(BUCKET_NAME).remove([nome_arquivo])
+        print(f"Arquivo removido com sucesso: {nome_arquivo}")
+    except Exception as e:
+        print(f"Erro ao deletar {nome_arquivo}: {e}")
 
     return redirect(url_for('index'))
 
