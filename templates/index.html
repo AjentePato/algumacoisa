@@ -7,7 +7,7 @@
     <style>
         body { 
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
-            max-width: 900px; 
+            max-width: 950px; 
             margin: 30px auto; 
             padding: 0 15px; 
             background-color: #f9fafb; 
@@ -23,7 +23,7 @@
         }
         .upload-form { 
             display: flex; 
-            gap: 10px; 
+            gap: 12px; 
             align-items: center; 
             flex-wrap: wrap;
         }
@@ -40,7 +40,7 @@
         
         .grid { 
             display: grid; 
-            grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); 
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); 
             gap: 20px; 
         }
         .media-card { 
@@ -50,40 +50,84 @@
             overflow: hidden; 
             display: flex; 
             flex-direction: column; 
-            align-items: center; 
             box-shadow: 0 1px 2px rgba(0,0,0,0.05); 
         }
         .media-card img, .media-card video { 
             width: 100%; 
             height: 200px; 
             object-fit: cover; 
-            background: #000; 
+            background: #111827; 
         }
-        .media-info {
-            padding: 12px;
+
+        /* Área de reprodução de áudio */
+        .audio-container {
             width: 100%;
-            box-sizing: border-box;
+            height: 200px;
+            background: #1f2937;
             display: flex;
             flex-direction: column;
+            justify-content: center;
             align-items: center;
-            gap: 8px;
+            gap: 15px;
+            box-sizing: border-box;
+            padding: 15px;
+        }
+        .audio-icon {
+            font-size: 42px;
+        }
+        .audio-container audio {
+            width: 100%;
+        }
+
+        .media-info {
+            padding: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
         }
         .media-name { 
-            font-size: 12px; 
-            color: #6b7280; 
+            font-size: 13px; 
+            color: #4b5563; 
             word-break: break-all; 
             text-align: center; 
+            font-weight: 500;
+        }
+        
+        /* Botões de Ação (Baixar e Excluir lado a lado) */
+        .action-buttons {
+            display: flex;
+            gap: 8px;
+            width: 100%;
+        }
+        .btn-download {
+            background-color: #10b981;
+            color: white;
+            text-decoration: none;
+            padding: 8px 12px;
+            font-size: 13px;
+            border-radius: 4px;
+            font-weight: 500;
+            text-align: center;
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background-color 0.2s;
+        }
+        .btn-download:hover {
+            background-color: #059669;
         }
         .btn-delete {
             background-color: #ef4444;
             color: white;
             border: none;
-            padding: 6px 12px;
+            padding: 8px 12px;
             font-size: 13px;
             border-radius: 4px;
             cursor: pointer;
             font-weight: 500;
             width: 100%;
+            transition: background-color 0.2s;
         }
         .btn-delete:hover {
             background-color: #dc2626;
@@ -92,12 +136,13 @@
 </head>
 <body>
 
-    <h1>Armazenamento de Fotos e Vídeos</h1>
+    <h1>Armazenamento de Mídias na Nuvem</h1>
 
     <div class="upload-card">
-        <h3>Enviar novo arquivo</h3>
+        <h3>Enviar novo arquivo (Foto, Vídeo ou Áudio)</h3>
         <form class="upload-form" action="/upload" method="post" enctype="multipart/form-data">
-            <input type="file" name="file" accept="image/*,video/*" required>
+            <!-- accept atualizado com audio/* -->
+            <input type="file" name="file" accept="image/*,video/*,audio/*" required>
             <button type="submit" class="btn-primary">Enviar para Nuvem</button>
         </form>
     </div>
@@ -111,19 +156,35 @@
     <div class="grid">
         {% for item in itens %}
             <div class="media-card">
+                
+                <!-- Renderiza de acordo com o tipo -->
                 {% if item.is_video %}
                     <video controls src="{{ item.url }}"></video>
+                {% elif item.is_audio %}
+                    <div class="audio-container">
+                        <div class="audio-icon">🎵</div>
+                        <audio controls src="{{ item.url }}"></audio>
+                    </div>
                 {% else %}
                     <img src="{{ item.url }}" alt="{{ item.nome }}" loading="lazy">
                 {% endif %}
                 
                 <div class="media-info">
                     <span class="media-name">{{ item.nome }}</span>
-                    <!-- Botão para Apagar -->
-                    <form action="/deletar/{{ item.nome }}" method="post" style="width: 100%;" onsubmit="return confirm('Deseja realmente apagar esta mídia?');">
-                        <button type="submit" class="btn-delete">Excluir da Nuvem</button>
-                    </form>
+
+                    <div class="action-buttons">
+                        <!-- Botão de Download Separado (usa o gatilho ?download= do Supabase) -->
+                        <a href="{{ item.url }}?download={{ item.nome }}" class="btn-download" download>
+                            ⬇ Baixar
+                        </a>
+
+                        <!-- Botão de Excluir -->
+                        <form action="/deletar/{{ item.nome }}" method="post" style="flex: 1;" onsubmit="return confirm('Deseja realmente apagar este arquivo?');">
+                            <button type="submit" class="btn-delete">🗑 Excluir</button>
+                        </form>
+                    </div>
                 </div>
+
             </div>
         {% endfor %}
     </div>
